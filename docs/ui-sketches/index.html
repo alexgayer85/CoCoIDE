@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CoCoIDE — UI Sketches</title>
+  <style>
+    :root {
+      --bg: #1a1d23;
+      --bg-panel: #22262e;
+      --bg-elevated: #2a2f3a;
+      --bg-input: #161920;
+      --border: #3a4150;
+      --border-soft: #2e3440;
+      --text: #e8eaed;
+      --text-dim: #9aa3b2;
+      --text-mute: #6b7380;
+      --accent: #e85d04;          /* warm CoCo-ish amber/orange */
+      --accent-soft: #f48c06;
+      --accent-dim: rgba(232, 93, 4, 0.15);
+      --green: #3dcc85;
+      --yellow: #e6b84d;
+      --red: #e85a5a;
+      --blue: #5b9fd4;
+      --purple: #a78bfa;
+      --toolbar-h: 40px;
+      --statusbar-h: 26px;
+      --sidebar-w: 220px;
+      --disk-w: 280px;
+      --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+      --radius: 6px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.45);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-ui);
+      background: #0f1115;
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.4;
+    }
+
+    /* ── Page chrome (sketch navigator) ── */
+    .sketch-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: linear-gradient(180deg, #12151a 0%, #0f1115 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px 14px;
+    }
+    .sketch-nav h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sketch-nav h1 .logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #1a1008;
+      font-weight: 800;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+    .sketch-nav p {
+      color: var(--text-dim);
+      font-size: 13px;
+      margin-top: 4px;
+      max-width: 720px;
+    }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .tab {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text-dim);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    .tab:hover { border-color: var(--accent-soft); color: var(--text); }
+    .tab.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent-soft);
+    }
+
+    .stage {
+      padding: 24px 20px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .stage-label {
+      width: min(1100px, 100%);
+      color: var(--text-mute);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .stage-notes {
+      width: min(1100px, 100%);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    .stage-notes strong { color: var(--text); }
+    .stage-notes ul { margin: 6px 0 0 18px; }
+    .stage-notes li { margin: 3px 0; }
+
+    .screen { display: none; width: min(1100px, 100%); }
+    .screen.active { display: block; }
+
+    /* ── Fake window shell ── */
+    .window {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      min-height: 620px;
+      display: flex;
+      flex-direction: column;
+    }
+    .titlebar {
+      height: 36px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      user-select: none;
+    }
+    .traffic {
+      display: flex;
+      gap: 6px;
+    }
+    .traffic span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #555;
+    }
+    .traffic .r { background: #e85a5a; }
+    .traffic .y { background: #e6b84d; }
+    .traffic .g { background: #3dcc85; }
+    .titlebar .title {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .titlebar .title b { color: var(--text); font-weight: 500; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      height: var(--toolbar-h);
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 4px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    .tb-btn {
+      appearance: none;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tb-btn:hover { background: var(--bg-elevated); border-color: var(--border); }
+    .tb-btn.primary {
+      background: var(--accent);
+      color: #1a1008;
+      font-weight: 600;
+    }
+    .tb-btn.primary:hover { background: var(--accent-soft); border-color: transparent; }
+    .tb-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+    .tb-chip {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+      padding-right: 4px;
+    }
+    .chip {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .chip.ok { border-color: rgba(61,204,133,0.4); color: var(--green); }
+    .chip.warn { border-color: rgba(230,184,77,0.4); color: var(--yellow); }
+
+    /* ── Body layout ── */
+    .body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr var(--disk-w);
+      min-height: 0;
+      overflow: hidden;
+    }
+    .body.no-disk {
+      grid-template-columns: var(--sidebar-w) 1fr;
+    }
+    .body.editor-only {
+      grid-template-columns: 1fr;
+    }
+    .body.wizard {
+      grid-template-columns: 1fr;
+      place-items: center;
+      background: var(--bg);
+      padding: 32px;
+    }
+
+    .sidebar, .disk-panel, .center {
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar {
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-soft);
+    }
+    .disk-panel {
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-soft);
+    }
+    .panel-head {
+      height: 30px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-mute);
+      border-bottom: 1px solid var(--border-soft);
+      flex-shrink: 0;
+    }
+    .panel-head .actions { display: flex; gap: 4px; text-transform: none; letter-spacing: 0; }
+    .icon-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+    .icon-btn:hover { background: var(--bg-elevated); color: var(--text); }
+
+    .tree {
+      padding: 8px 6px;
+      font-size: 13px;
+      overflow: auto;
+      flex: 1;
+    }
+    .tree-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .tree-item:hover { background: var(--bg-elevated); color: var(--text); }
+    .tree-item.active {
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+    }
+    .tree-item .ico { width: 16px; text-align: center; opacity: 0.8; font-size: 12px; }
+    .tree-item.folder { font-weight: 500; color: var(--text); }
+    .tree-indent { padding-left: 18px; }
+    .tree-indent-2 { padding-left: 34px; }
+    .badge {
+      margin-left: auto;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-mute);
+    }
+
+    /* ── Editor ── */
+    .center { background: var(--bg); }
+    .editor-tabs {
+      height: 32px;
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      padding: 0 8px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-soft);
+      flex-shrink: 0;
+    }
+    .etab {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px 6px 0 0;
+      color: var(--text-dim);
+      background: transparent;
+      border: 1px solid transparent;
+      border-bottom: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .etab.active {
+      background: var(--bg);
+      color: var(--text);
+      border-color: var(--border-soft);
+      margin-bottom: -1px;
+      padding-bottom: 7px;
+    }
+    .etab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+    .etab .x { opacity: 0.4; font-size: 11px; }
+    .mode-toggle {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding-bottom: 4px;
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .toggle button {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 3px 10px;
+      cursor: pointer;
+    }
+    .toggle button.on {
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+    }
+
+    .editor-wrap {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      overflow: auto;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .gutter {
+      background: var(--bg-panel);
+      color: var(--text-mute);
+      text-align: right;
+      padding: 12px 8px;
+      user-select: none;
+      border-right: 1px solid var(--border-soft);
+    }
+    .gutter div { height: 1.55em; }
+    .gutter .warn { color: var(--yellow); }
+    .gutter .err { color: var(--red); }
+    .code {
+      padding: 12px 14px;
+      white-space: pre;
+      color: #c8cdd6;
+    }
+    .code .kw { color: #c792ea; }
+    .code .num { color: #f78c6c; }
+    .code .str { color: #c3e88d; }
+    .code .com { color: #546e7a; font-style: italic; }
+    .code .fn { color: #82aaff; }
+    .code .var { color: #f07178; }
+    .code .pre { color: var(--accent-soft); }
+    .code .hl-warn {
+      background: rgba(230,184,77,0.12);
+      border-bottom: 1px dashed var(--yellow);
+    }
+    .code .hl-info {
+      background: rgba(91,159,212,0.1);
+      border-bottom: 1px dotted var(--blue);
+    }
+
+    /* bottom diagnostics */
+    .bottom {
+      height: 140px;
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+      flex-shrink: 0;
+    }
+    .bottom-tabs {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 12px;
+    }
+    .btab {
+      padding: 4px 10px;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .btab.active { color: var(--text); background: var(--bg-elevated); }
+    .btab .count {
+      background: var(--bg-input);
+      border-radius: 8px;
+      padding: 0 5px;
+      font-size: 10px;
+      margin-left: 4px;
+      color: var(--yellow);
+    }
+    .bottom-body {
+      flex: 1;
+      overflow: auto;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      padding: 6px 10px;
+    }
+    .diag {
+      display: grid;
+      grid-template-columns: 56px 70px 1fr;
+      gap: 8px;
+      padding: 3px 4px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .diag:hover { background: var(--bg-elevated); }
+    .sev-w { color: var(--yellow); }
+    .sev-e { color: var(--red); }
+    .sev-i { color: var(--blue); }
+    .log-line { color: var(--text-dim); padding: 1px 0; }
+    .log-line.ok { color: var(--green); }
+    .log-line.cmd { color: var(--purple); }
+
+    /* Disk panel */
+    .disk-meta {
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border-soft);
+      display: grid;
+      gap: 4px;
+    }
+    .disk-meta .row { display: flex; justify-content: space-between; }
+    .meter {
+      height: 6px;
+      background: var(--bg-input);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+    .meter > i {
+      display: block;
+      height: 100%;
+      width: 38%;
+      background: linear-gradient(90deg, var(--green), var(--accent-soft));
+    }
+    .file-list {
+      flex: 1;
+      overflow: auto;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+    .file-row {
+      display: grid;
+      grid-template-columns: 1fr 36px 28px 40px;
+      gap: 4px;
+      padding: 5px 10px;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 1px solid transparent;
+    }
+    .file-row:hover { background: var(--bg-elevated); color: var(--text); }
+    .file-row.sel {
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+    }
+    .file-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-row .type { color: var(--text-mute); }
+    .file-row.head {
+      color: var(--text-mute);
+      font-family: var(--font-ui);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: default;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .file-row.head:hover { background: transparent; color: var(--text-mute); }
+    .disk-actions {
+      padding: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      border-top: 1px solid var(--border-soft);
+    }
+    .mini-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .mini-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    /* Status bar */
+    .statusbar {
+      height: var(--statusbar-h);
+      background: #1e222a;
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--text-mute);
+      flex-shrink: 0;
+    }
+    .statusbar .sp { flex: 1; }
+    .statusbar .ok { color: var(--green); }
+    .statusbar .warn { color: var(--yellow); }
+
+    /* ── Wizard ── */
+    .wizard-card {
+      width: min(560px, 100%);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 28px 22px;
+      box-shadow: var(--shadow);
+    }
+    .wizard-card h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .wizard-card .sub {
+      color: var(--text-dim);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .steps {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .step {
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    .step.on { background: var(--accent); }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+    .field input, .field select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: var(--font-ui);
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .choice {
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      border-radius: 8px;
+      padding: 12px 10px;
+      cursor: pointer;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .choice:hover { border-color: var(--accent-soft); color: var(--text); }
+    .choice.selected {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+    }
+    .choice .big {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: inherit;
+      margin-bottom: 2px;
+    }
+    .choice .tiny { font-size: 10px; opacity: 0.75; }
+    .checks { display: grid; gap: 8px; }
+    .check {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    .check input { margin-top: 3px; accent-color: var(--accent); }
+    .wizard-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 22px;
+      gap: 8px;
+    }
+
+    /* ── Settings ── */
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      min-height: 520px;
+    }
+    .settings-nav {
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-soft);
+      padding: 12px 8px;
+    }
+    .settings-nav button {
+      width: 100%;
+      text-align: left;
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 8px 10px;
+      border-radius: 5px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-bottom: 2px;
+    }
+    .settings-nav button:hover { background: var(--bg-elevated); color: var(--text); }
+    .settings-nav button.active {
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+    }
+    .settings-body {
+      padding: 20px 24px;
+      overflow: auto;
+    }
+    .settings-body h3 {
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .settings-body .hint {
+      color: var(--text-mute);
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .path-row {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .path-row span { color: var(--text-dim); }
+    .path-row input {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .status-dot.on { background: var(--green); }
+    .status-dot.off { background: var(--red); }
+
+    /* ── Preprocessor side-by-side ── */
+    .pp-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      flex: 1;
+      min-height: 360px;
+    }
+    .pp-pane {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-soft);
+      min-height: 0;
+    }
+    .pp-pane:last-child { border-right: none; }
+    .pp-pane .label {
+      height: 28px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-mute);
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-soft);
+      gap: 8px;
+    }
+    .pp-pane .label .tag {
+      background: var(--accent-dim);
+      color: var(--accent-soft);
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-family: var(--font-mono);
+    }
+    .pp-pane .label .tag.out {
+      background: rgba(61,204,133,0.12);
+      color: var(--green);
+    }
+    .pp-code {
+      flex: 1;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.55;
+      white-space: pre;
+      overflow: auto;
+      color: #c8cdd6;
+    }
+
+    /* ── Compact / light layout variant ── */
+    .light-hint {
+      display: inline-block;
+      background: rgba(91,159,212,0.12);
+      color: var(--blue);
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 900px) {
+      .body { grid-template-columns: 1fr; }
+      .sidebar, .disk-panel { display: none; }
+      .choice-grid { grid-template-columns: 1fr; }
+      .pp-split { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="sketch-nav">
+    <h1>
+      <span class="logo">3</span>
+      CoCoIDE — UI Sketches
+    </h1>
+    <p>
+      Disk-first · Disk Extended BASIC · CoCo&nbsp;3 priority · light shell · optional preprocessor.
+      Click tabs to walk the main surfaces. These are interactive wireframes, not the app.
+    </p>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-screen="main">1. Main window</button>
+      <button class="tab" data-screen="light">2. Lighter layout</button>
+      <button class="tab" data-screen="wizard">3. New project</button>
+      <button class="tab" data-screen="preprocess">4. Preprocessor</button>
+      <button class="tab" data-screen="settings">5. Tools &amp; ROMs</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- ═══════════════ 1. MAIN ═══════════════ -->
+    <section class="screen active" id="main">
+      <div class="stage-label">Primary workspace</div>
+      <div class="window">
+        <div class="titlebar">
+          <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+          <div class="title"><b>spaceinvaders</b> — CoCoIDE</div>
+        </div>
+
+        <div class="toolbar">
+          <button class="tb-btn">Open</button>
+          <button class="tb-btn">Save</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn">Build Disk</button>
+          <button class="tb-btn primary">▶ Run in XRoar</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn">Preprocess</button>
+          <button class="tb-btn">Renumber…</button>
+          <div class="tb-chip">
+            <span class="chip ok">CoCo 3 · 512K · DECB</span>
+            <span class="chip">build/work.dsk</span>
+          </div>
+        </div>
+
+        <div class="body">
+          <aside class="sidebar">
+            <div class="panel-head">Project</div>
+            <div class="tree">
+              <div class="tree-item folder"><span class="ico">▾</span> spaceinvaders</div>
+              <div class="tree-item tree-indent folder"><span class="ico">▾</span> src</div>
+              <div class="tree-item tree-indent-2 active"><span class="ico">≡</span> main.bas <span class="badge">BAS</span></div>
+              <div class="tree-item tree-indent-2"><span class="ico">≡</span> title.bas</div>
+              <div class="tree-item tree-indent-2"><span class="ico">⚙</span> sprites.asm</div>
+              <div class="tree-item tree-indent folder"><span class="ico">▾</span> build</div>
+              <div class="tree-item tree-indent-2"><span class="ico">▣</span> work.dsk</div>
+              <div class="tree-item tree-indent"><span class="ico">··</span> project.cocoide</div>
+            </div>
+          </aside>
+
+          <section class="center">
+            <div class="editor-tabs">
+              <div class="etab active"><span class="dot"></span> main.bas <span class="x">×</span></div>
+              <div class="etab">sprites.asm <span class="x">×</span></div>
+              <div class="mode-toggle">
+                Source
+                <div class="toggle">
+                  <button class="on">Modern</button>
+                  <button>CoCo</button>
+                </div>
+              </div>
+            </div>
+            <div class="editor-wrap">
+              <div class="gutter">
+                <div>1</div>
+                <div>2</div>
+                <div>3</div>
+                <div class="warn">4</div>
+                <div>5</div>
+                <div>6</div>
+                <div>7</div>
+                <div>8</div>
+                <div>9</div>
+                <div>10</div>
+                <div>11</div>
+                <div>12</div>
+                <div>13</div>
+                <div>14</div>
+              </div>
+              <div class="code"><span class="pre">@target coco3, 512k, decb</span>
+<span class="com">' Title screen + game loop (modern source)</span>
+<span class="kw">procedure</span> <span class="fn">ShowTitle</span>()
+  <span class="kw">cls</span>
+  <span class="kw">print</span> <span class="str">"SPACE INVADERS"</span>
+  <span class="kw">print</span> <span class="str">"PRESS ANY KEY"</span>
+  <span class="hl-info"><span class="kw">score</span> = 0</span>
+  <span class="kw">highScore</span> = 0
+<span class="kw">end</span>
+
+<span class="kw">procedure</span> <span class="fn">Main</span>()
+  <span class="fn">ShowTitle</span>()
+  <span class="hl-warn"><span class="kw">pclear</span> 4</span>
+  <span class="kw">pmode</span> 3,1 : <span class="kw">screen</span> 1,0
+  <span class="com">' …</span>
+<span class="kw">end</span></div>
+            </div>
+            <div class="bottom">
+              <div class="bottom-tabs">
+                <div class="btab active">Problems <span class="count">2</span></div>
+                <div class="btab">Build</div>
+                <div class="btab">XRoar</div>
+              </div>
+              <div class="bottom-body">
+                <div class="diag"><span class="sev-w">warn</span><span>main.bas:4</span><span>Variable <b>score</b> shares significant name with <b>sc</b> (2-char rule) — preprocessor will map if enabled</span></div>
+                <div class="diag"><span class="sev-i">info</span><span>main.bas:11</span><span>PCLEAR 4 moves BASIC start — ~8K graphics on CoCo 3 DECB profile</span></div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="disk-panel">
+            <div class="panel-head">
+              Disk
+              <div class="actions">
+                <button class="icon-btn" title="Refresh">↻</button>
+                <button class="icon-btn" title="New disk">＋</button>
+              </div>
+            </div>
+            <div class="disk-meta">
+              <div class="row"><span>work.dsk</span><span>35T SS DECB</span></div>
+              <div class="row"><span>Free granules</span><span>42 / 68</span></div>
+              <div class="meter"><i></i></div>
+            </div>
+            <div class="file-list">
+              <div class="file-row head"><span>Name</span><span>Type</span><span>A/B</span><span>Grans</span></div>
+              <div class="file-row sel"><span class="name">MAIN.BAS</span><span class="type">0</span><span>B</span><span>3</span></div>
+              <div class="file-row"><span class="name">TITLE.BAS</span><span class="type">0</span><span>B</span><span>1</span></div>
+              <div class="file-row"><span class="name">SPRT.BIN</span><span class="type">2</span><span>B</span><span>2</span></div>
+              <div class="file-row"><span class="name">SCORES.DAT</span><span class="type">1</span><span>A</span><span>1</span></div>
+            </div>
+            <div class="disk-actions">
+              <button class="mini-btn">Add current</button>
+              <button class="mini-btn">Extract</button>
+              <button class="mini-btn">Delete</button>
+              <button class="mini-btn">List…</button>
+            </div>
+          </aside>
+        </div>
+
+        <div class="statusbar">
+          <span class="ok">● tools OK</span>
+          <span>Ln 11, Col 3</span>
+          <span>Modern BASIC</span>
+          <span class="sp"></span>
+          <span class="warn">2 problems</span>
+          <span>UTF-8 → DECB tokens on build</span>
+        </div>
+      </div>
+      <div class="stage-notes">
+        <strong>Main window — design notes</strong>
+        <ul>
+          <li><strong>Toolbar stays thin:</strong> Open/Save, Build Disk, primary <em>Run in XRoar</em>, then secondary tools.</li>
+          <li><strong>Target chip</strong> (top-right) is always visible: machine · RAM · dialect · active .dsk.</li>
+          <li><strong>Three columns default:</strong> project tree | editor + problems | live disk image (first-class, not a dialog).</li>
+          <li><strong>Modern / CoCo toggle</strong> on the editor tab bar switches between preprocessor source and expanded CoCo BASIC (line numbers + short vars).</li>
+          <li><strong>Bottom panel</strong> collapses to one of: Problems · Build log · XRoar output.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 2. LIGHTER ═══════════════ -->
+    <section class="screen" id="light">
+      <div class="stage-label">Lighter layout <span class="light-hint">optional density</span></div>
+      <div class="window">
+        <div class="titlebar">
+          <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+          <div class="title"><b>hello</b> — CoCoIDE</div>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn">Open</button>
+          <button class="tb-btn">Save</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn">Disk ▾</button>
+          <button class="tb-btn primary">▶ Run</button>
+          <div class="tb-chip">
+            <span class="chip ok">CoCo 3 · 128K · DECB</span>
+          </div>
+        </div>
+        <div class="body editor-only" style="grid-template-rows: 1fr auto;">
+          <section class="center" style="min-height: 380px;">
+            <div class="editor-tabs">
+              <div class="etab active">hello.bas</div>
+              <div class="mode-toggle">
+                <button class="mini-btn" style="margin-right:8px">☰ Files</button>
+                <button class="mini-btn" style="margin-right:8px">▣ Disk</button>
+              </div>
+            </div>
+            <div class="editor-wrap" style="min-height: 280px;">
+              <div class="gutter">
+                <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div>
+              </div>
+              <div class="code"><span class="kw">cls</span>
+<span class="kw">print</span> <span class="str">"HELLO FROM COCO 3"</span>
+<span class="kw">print</span> <span class="str">"DISK EXTENDED BASIC"</span>
+<span class="kw">input</span> <span class="str">"NAME";</span> <span class="var">N$</span>
+<span class="kw">print</span> <span class="str">"HI ";</span><span class="var">N$</span></div>
+            </div>
+          </section>
+          <div class="bottom" style="height: 100px;">
+            <div class="bottom-tabs">
+              <div class="btab active">Problems <span class="count">0</span></div>
+              <div class="btab">Build</div>
+            </div>
+            <div class="bottom-body">
+              <div class="log-line ok">No issues · ready to build</div>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span class="ok">● ready</span>
+          <span class="sp"></span>
+          <span>Panels: closed (Files / Disk as drawers)</span>
+        </div>
+      </div>
+      <div class="stage-notes">
+        <strong>Lighter variant</strong>
+        <ul>
+          <li>Editor-first: project tree and disk browser become <strong>drawers</strong> (toggle from tab bar or shortcuts).</li>
+          <li>Fewer toolbar buttons; Disk actions live under a single menu.</li>
+          <li>Good default for small BASIC programs; power users can pin panels back (layout 1).</li>
+          <li>Preference: <em>Layout → Comfortable | Compact | Editor focus</em>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 3. WIZARD ═══════════════ -->
+    <section class="screen" id="wizard">
+      <div class="stage-label">New project wizard</div>
+      <div class="window">
+        <div class="titlebar">
+          <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+          <div class="title">New Project — CoCoIDE</div>
+        </div>
+        <div class="body wizard">
+          <div class="wizard-card">
+            <h2>New CoCo project</h2>
+            <p class="sub">Disk-first defaults · Disk Extended BASIC · CoCo 3 preferred</p>
+            <div class="steps">
+              <div class="step on"></div>
+              <div class="step on"></div>
+              <div class="step"></div>
+            </div>
+
+            <div class="field">
+              <label>Project name</label>
+              <input type="text" value="mygame" />
+            </div>
+
+            <div class="field">
+              <label>Machine</label>
+              <div class="choice-grid">
+                <div class="choice"><div class="big">CoCo 1</div><div class="tiny">4K / 16K</div></div>
+                <div class="choice"><div class="big">CoCo 2</div><div class="tiny">16K / 64K</div></div>
+                <div class="choice selected"><div class="big">CoCo 3</div><div class="tiny">128K / 512K</div></div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Memory</label>
+              <select>
+                <option>128K</option>
+                <option selected>512K</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Dialect &amp; media</label>
+              <select>
+                <option selected>Disk Extended Color BASIC (DECB) · .dsk</option>
+                <option>Extended Color BASIC · cassette only</option>
+                <option>Color BASIC · cassette only</option>
+              </select>
+            </div>
+
+            <div class="checks">
+              <label class="check">
+                <input type="checkbox" checked />
+                <span><strong style="color:var(--text)">Create blank disk image</strong><br />35-track DECB · build/work.dsk</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" checked />
+                <span><strong style="color:var(--text)">Enable modern BASIC preprocessor</strong><br />No line numbers · long variable names · procedures</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" />
+                <span>Include ASM stub (lwasm) for ML routines</span>
+              </label>
+            </div>
+
+            <div class="wizard-actions">
+              <button class="tb-btn">Cancel</button>
+              <div style="display:flex;gap:8px">
+                <button class="tb-btn">Back</button>
+                <button class="tb-btn primary">Create project</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stage-notes">
+        <strong>Wizard notes</strong>
+        <ul>
+          <li>Step 1: name + location. Step 2 (shown): target. Step 3: optional template (empty / menu / PMODE game / CoCo 3 WIDTH 80).</li>
+          <li>CoCo 3 is pre-selected; changing machine filters memory and dialect options.</li>
+          <li>Preprocessor on by default for new projects; can be toggled later in project settings.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 4. PREPROCESSOR ═══════════════ -->
+    <section class="screen" id="preprocess">
+      <div class="stage-label">Optional preprocessor — Modern → CoCo</div>
+      <div class="window">
+        <div class="titlebar">
+          <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+          <div class="title">Preprocessor preview — CoCoIDE</div>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn">Map variables…</button>
+          <button class="tb-btn">Line step: 10</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn primary">Apply &amp; copy to disk</button>
+          <div class="tb-chip">
+            <span class="chip">Output: MAIN.BAS (tokenized)</span>
+          </div>
+        </div>
+        <div class="pp-split">
+          <div class="pp-pane">
+            <div class="label">You write <span class="tag">.mbas / modern</span></div>
+            <div class="pp-code"><span class="pre">@target coco3, 512k, decb</span>
+<span class="pre">@start 100</span>
+<span class="pre">@step 10</span>
+
+<span class="com">' Long names OK — mapped on build</span>
+playerX = 16
+playerY = 96
+score = 0
+highScore = 1000
+
+<span class="kw">procedure</span> DrawScore()
+  <span class="kw">print</span> @0, <span class="str">"SCORE:"</span>; score
+  <span class="kw">print</span> @16, <span class="str">"HI:"</span>; highScore
+<span class="kw">end</span>
+
+<span class="kw">procedure</span> Main()
+  <span class="kw">pclear</span> 4
+  DrawScore()
+  <span class="kw">goto</span> Main
+<span class="kw">end</span>
+</div>
+          </div>
+          <div class="pp-pane">
+            <div class="label">CoCo gets <span class="tag out">DECB</span></div>
+            <div class="pp-code"><span class="num">100</span> <span class="com">' generated by CoCoIDE — do not edit by hand</span>
+<span class="num">110</span> PX=16
+<span class="num">120</span> PY=96
+<span class="num">130</span> SC=0
+<span class="num">140</span> HS=1000
+<span class="num">150</span> <span class="kw">GOTO</span> 200
+<span class="num">160</span> <span class="com">' PROC DrawScore</span>
+<span class="num">170</span> <span class="kw">PRINT</span>@0,<span class="str">"SCORE:"</span>;SC
+<span class="num">180</span> <span class="kw">PRINT</span>@16,<span class="str">"HI:"</span>;HS
+<span class="num">190</span> <span class="kw">RETURN</span>
+<span class="num">200</span> <span class="com">' PROC Main</span>
+<span class="num">210</span> <span class="kw">PCLEAR</span>4
+<span class="num">220</span> <span class="kw">GOSUB</span> 170
+<span class="num">230</span> <span class="kw">GOTO</span> 200
+</div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>Mapped: playerX→PX, playerY→PY, score→SC, highScore→HS</span>
+          <span class="sp"></span>
+          <span class="ok">No collisions</span>
+        </div>
+      </div>
+      <div class="stage-notes">
+        <strong>Preprocessor UI</strong>
+        <ul>
+          <li>Primary edit surface is <strong>modern source</strong>; CoCo form is a build artifact (viewable, optional side-by-side).</li>
+          <li>Features: auto line numbers, long→2-char (or unique short) vars, <code>procedure</code>→<code>GOSUB</code>/<code>RETURN</code>, labels→line numbers.</li>
+          <li><strong>Variable map panel</strong> (toolbar) lets you pin preferred short names and shows collisions before build.</li>
+          <li>Diagnostics run on <em>both</em>: modern semantics + post-expand CoCo rules (memory, keywords, machine).</li>
+          <li>Users can still write classic numbered BASIC with preprocessor off — zero surprise.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══════════════ 5. SETTINGS ═══════════════ -->
+    <section class="screen" id="settings">
+      <div class="stage-label">Tools, ROMs &amp; preferences</div>
+      <div class="window">
+        <div class="titlebar">
+          <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+          <div class="title">Preferences — CoCoIDE</div>
+        </div>
+        <div class="settings-layout">
+          <nav class="settings-nav">
+            <button class="active">Tools</button>
+            <button>ROMs</button>
+            <button>Editor</button>
+            <button>Preprocessor</button>
+            <button>XRoar</button>
+            <button>Appearance</button>
+          </nav>
+          <div class="settings-body">
+            <h3>External tools</h3>
+            <p class="hint">CoCoIDE shells out to these. Green = found on PATH or custom path.</p>
+
+            <div class="path-row">
+              <span><span class="status-dot on"></span>xroar</span>
+              <input value="/usr/bin/xroar" readonly />
+              <button class="mini-btn">Browse</button>
+            </div>
+            <div class="path-row">
+              <span><span class="status-dot on"></span>decb</span>
+              <input value="/usr/local/bin/decb" readonly />
+              <button class="mini-btn">Browse</button>
+            </div>
+            <div class="path-row">
+              <span><span class="status-dot on"></span>lwasm</span>
+              <input value="/usr/bin/lwasm" readonly />
+              <button class="mini-btn">Browse</button>
+            </div>
+            <div class="path-row">
+              <span><span class="status-dot off"></span>os9</span>
+              <input value="(optional — not found)" readonly />
+              <button class="mini-btn">Browse</button>
+            </div>
+
+            <h3 style="margin-top:24px">Default target (new projects)</h3>
+            <p class="hint">Can still be overridden per project.</p>
+            <div class="field">
+              <select>
+                <option selected>CoCo 3 · 512K · Disk Extended BASIC</option>
+                <option>CoCo 3 · 128K · Disk Extended BASIC</option>
+                <option>CoCo 2 · 64K · Disk Extended BASIC</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>Preferences are global · project.cocoide overrides machine/media</span>
+          <span class="sp"></span>
+          <button class="mini-btn">Restore defaults</button>
+        </div>
+      </div>
+      <div class="stage-notes">
+        <strong>Settings notes</strong>
+        <ul>
+          <li>First-run wizard: detect tools → pick ROM folder → confirm default CoCo 3 DECB.</li>
+          <li>ROMs page: paths + checksum status (we never ship copyrighted ROMs).</li>
+          <li>XRoar page: extra CLI flags, window scale, TV/RGB, joystick.</li>
+          <li>Appearance: follow system (KDE/GNOME dark/light) or force CoCoIDE dark amber theme.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const screens = document.querySelectorAll('.screen');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        screens.forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.screen).classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  </script>
+</body>
+</html>

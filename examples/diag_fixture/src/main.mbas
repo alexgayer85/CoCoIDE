@@ -1,0 +1,10 @@
+@target coco2, 64k, decb
+@include "extra.mbas"
+
+procedure Main()
+  pclear 4
+  score = 0
+  scout = 1
+  hscreen 2
+  print score
+end

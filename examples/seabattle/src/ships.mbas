@@ -1,0 +1,86 @@
+' Ship table and placement helpers
+' Ship ids 1..5 · lengths SL(id) · remaining cells SR(id)
+'
+' IMPORTANT: Never RETURN from inside a FOR/NEXT on CoCo BASIC.
+' That leaves the FOR stack dirty and causes ?RG ERROR on a later RETURN.
+
+procedure InitShips()
+  SL(1) = 5
+  SL(2) = 4
+  SL(3) = 3
+  SL(4) = 3
+  SL(5) = 2
+  SR(1) = 5
+  SR(2) = 4
+  SR(3) = 3
+  SR(4) = 3
+  SR(5) = 2
+end
+
+procedure PrintShipName(id)
+  if id = 1 then print "CARRIER   (5)";
+  if id = 2 then print "BATTLESHIP(4)";
+  if id = 3 then print "CRUISER   (3)";
+  if id = 4 then print "SUBMARINE (3)";
+  if id = 5 then print "DESTROYER (2)";
+end
+
+procedure ClearGrid(which)
+  for r = 1 to 10
+    for c = 1 to 10
+      if which = 0 then PS(r, c) = 0
+      if which = 1 then ES(r, c) = 0
+      if which = 2 then RD(r, c) = 0
+      if which = 3 then AK(r, c) = 0
+    next c
+  next r
+end
+
+procedure CanPlace(grid, r, c, length, horiz)
+  ' returns CP=1 if ok — always finish FOR loops (no RETURN inside)
+  CP = 1
+  for i = 0 to length - 1
+    if CP = 1 then rr = r
+    if CP = 1 then cc = c
+    if CP = 1 then if horiz = 1 then cc = c + i
+    if CP = 1 then if horiz = 0 then rr = r + i
+    if CP = 1 then if rr < 1 then CP = 0
+    if CP = 1 then if rr > 10 then CP = 0
+    if CP = 1 then if cc < 1 then CP = 0
+    if CP = 1 then if cc > 10 then CP = 0
+    if CP = 1 then if grid = 0 then if PS(rr, cc) <> 0 then CP = 0
+    if CP = 1 then if grid = 1 then if ES(rr, cc) <> 0 then CP = 0
+  next i
+end
+
+procedure PlaceShip(grid, id, r, c, horiz)
+  for i = 0 to SL(id) - 1
+    rr = r
+    cc = c
+    if horiz = 1 then cc = c + i
+    if horiz = 0 then rr = r + i
+    if grid = 0 then PS(rr, cc) = id
+    if grid = 1 then ES(rr, cc) = id
+  next i
+end
+
+procedure AutoPlaceFleet(grid)
+  for id = 1 to 5
+    tries = 0
+    placed = 0
+ap_retry:
+    if placed = 1 then goto ap_next
+    tries = tries + 1
+    if tries > 200 then goto ap_next
+    horiz = rnd(2) - 1
+    if horiz = 1 then r = rnd(10)
+    if horiz = 1 then c = rnd(11 - SL(id))
+    if horiz = 0 then r = rnd(11 - SL(id))
+    if horiz = 0 then c = rnd(10)
+    CanPlace(grid, r, c, SL(id), horiz)
+    if CP = 0 then goto ap_retry
+    PlaceShip(grid, id, r, c, horiz)
+    placed = 1
+ap_next:
+  next id
+end

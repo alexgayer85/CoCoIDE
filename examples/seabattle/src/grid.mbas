@@ -1,0 +1,170 @@
+' Display and coordinate I/O
+' Prefer INPUT for pauses — INKEY$ alone often misses keys under XRoar
+' keyboard translation until the emulated CoCo has solid focus.
+
+procedure WaitKey()
+  ' Drain any buffered key, then wait for a real press (INKEY$ path)
+  z$ = "x"
+wk_drain:
+  z$ = inkey$
+  if z$ <> "" then goto wk_drain
+wk_loop:
+  z$ = inkey$
+  if z$ = "" then goto wk_loop
+end
+
+procedure PauseEnter(msg$)
+  ' Most reliable pause in XRoar / DECB
+  print msg$;
+  input z$
+end
+
+procedure TitleScreen()
+  cls
+  print "        SEA BATTLE"
+  print
+  print "  NAVAL GRID COMBAT"
+  print
+  print "  INSPIRED BY THE CLASSIC"
+  print "  PEGBOARD NAVAL GAME"
+  print "  (ORIGINAL COCO EXAMPLE)"
+  print
+  print "  FLEET: 5 4 3 3 2"
+  print "  YOU VS COMPUTER"
+  print
+  print "  CLICK XROAR WINDOW IF NEEDED"
+  PauseEnter("  PRESS ENTER TO START: ")
+end
+
+procedure InitGame()
+  ' DIM zeroes numeric arrays on CoCo — do NOT ClearGrid here.
+  ' NEVER CLEAR inside a GOSUB (wipes stack → ?RG ERROR).
+  cls
+  print "INITIALIZING..."
+  dim PS(10, 10)
+  dim ES(10, 10)
+  dim RD(10, 10)
+  dim AK(10, 10)
+  dim SL(5)
+  dim SR(5)
+  ' Cell glyph tables: mid$(map$, value+1, 1) — faster than many IFs per cell
+  ' radar: 0=. 1=o 2=*
+  RM$ = ".o*"
+  ' fleet: 0=. 1-5=# 6=o 7=*
+  FM$ = ".#####o*"
+  InitShips()
+  PH = 17
+  EH = 17
+  Hunt = 0
+  HR = 0
+  HC = 0
+end
+
+procedure DrawRadar()
+  ' One PRINT per row (string built in RS$) — far fewer ROM calls than PRINT per cell
+  cls
+  print "SEA BATTLE - YOUR SHOTS"
+  print " 1234567890"
+  for r = 1 to 10
+    RS$ = chr$(64 + r)
+    for c = 1 to 10
+      v = RD(r, c)
+      RS$ = RS$ + mid$(RM$, v + 1, 1)
+    next c
+    print RS$
+  next r
+  print ".? o=miss *=hit  E:"; EH; " Y:"; PH
+end
+
+procedure DrawOwnFleet()
+  cls
+  print "SEA BATTLE - YOUR FLEET"
+  print " 1234567890"
+  for r = 1 to 10
+    RS$ = chr$(64 + r)
+    for c = 1 to 10
+      v = PS(r, c)
+      RS$ = RS$ + mid$(FM$, v + 1, 1)
+    next c
+    print RS$
+  next r
+  print "#=ship o=miss *=hit"
+end
+
+procedure ParseCoord(s$)
+  ' Sets GR,GC or GR=0 if bad. A1..J10 (0 means 10)
+  GR = 0
+  GC = 0
+  if s$ = "" then return
+  t$ = ""
+  for i = 1 to len(s$)
+    ch$ = mid$(s$, i, 1)
+    if ch$ <> " " then t$ = t$ + ch$
+  next i
+  if len(t$) < 2 then return
+  l$ = left$(t$, 1)
+  n$ = mid$(t$, 2)
+  a = asc(l$)
+  if a >= 97 then if a <= 106 then a = a - 32
+  if a < 65 then return
+  if a > 74 then return
+  GR = a - 64
+  GC = val(n$)
+  if n$ = "0" then GC = 10
+  if GC < 1 then GR = 0
+  if GC > 10 then GR = 0
+end
+
+procedure PlacePlayerFleet()
+  cls
+  print "PLACE YOUR FLEET"
+  print
+  print "TYPE A FOR AUTO, M FOR MANUAL"
+  input "CHOICE (A/M): "; m$
+  if m$ = "a" then goto pm_auto
+  if m$ = "A" then goto pm_auto
+  if m$ = "m" then goto pm_man
+  if m$ = "M" then goto pm_man
+  ' default auto if blank/other
+  goto pm_auto
+
+pm_auto:
+  cls
+  print "AUTO-DEPLOYING YOUR FLEET..."
+  print "(please wait)"
+  AutoPlaceFleet(0)
+  DrawOwnFleet()
+  print
+  PauseEnter("DEPLOYED. PRESS ENTER: ")
+  return
+
+pm_man:
+  for id = 1 to 5
+pm_one:
+    DrawOwnFleet()
+    print
+    print "PLACE ";
+    PrintShipName(id)
+    print
+    input "START (B3): "; c$
+    ParseCoord(c$)
+    if GR = 0 then print "BAD COORD": goto pm_one
+    input "H=HORIZ V=VERT: "; h$
+    horiz = 0
+    if h$ = "h" then horiz = 1
+    if h$ = "H" then horiz = 1
+    CanPlace(0, GR, GC, SL(id), horiz)
+    if CP = 0 then print "NO ROOM": goto pm_one
+    PlaceShip(0, id, GR, GC, horiz)
+  next id
+  DrawOwnFleet()
+  print
+  PauseEnter("READY. PRESS ENTER: ")
+end
+
+procedure PlaceEnemyFleet()
+  cls
+  print "COMPUTER DEPLOYING FLEET..."
+  print "(please wait)"
+  AutoPlaceFleet(1)
+end

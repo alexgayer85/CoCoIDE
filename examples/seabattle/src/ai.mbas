@@ -1,0 +1,154 @@
+' Combat loop + simple computer opponent
+' No RETURN inside FOR/NEXT (CoCo stack corruption → ?RG ERROR).
+
+procedure ApplyShot(grid, r, c)
+  ' HT: 0 miss, 1 hit, 2 already, 3 sunk · SID ship id
+  HT = 0
+  SID = 0
+  if grid = 1 then goto as_enemy
+  if grid = 0 then goto as_player
+  return
+
+as_enemy:
+  v = ES(r, c)
+  if RD(r, c) <> 0 then HT = 2: return
+  if v = 0 then RD(r, c) = 1: HT = 0: return
+  if v < 1 then return
+  if v > 5 then return
+  ES(r, c) = 7
+  RD(r, c) = 2
+  SID = v
+  SR(v) = SR(v) - 1
+  EH = EH - 1
+  HT = 1
+  if SR(v) = 0 then HT = 3
+  return
+
+as_player:
+  v = PS(r, c)
+  if v = 6 then HT = 2: return
+  if v = 7 then HT = 2: return
+  if v = 0 then PS(r, c) = 6: AK(r, c) = 1: HT = 0: return
+  if v < 1 then return
+  if v > 5 then return
+  PS(r, c) = 7
+  AK(r, c) = 2
+  SID = v
+  PH = PH - 1
+  HT = 1
+  left = 0
+  for rr = 1 to 10
+    for cc = 1 to 10
+      if PS(rr, cc) = SID then left = left + 1
+    next cc
+  next rr
+  if left = 0 then HT = 3
+end
+
+procedure PlayerFires()
+pf_shot:
+  DrawRadar()
+  print
+  print "YOUR SHOT (A1-J10, 0=10)? ";
+  print "(OR F=VIEW FLEET)"
+  input c$
+  if c$ = "f" then goto pf_fleet
+  if c$ = "F" then goto pf_fleet
+  ParseCoord(c$)
+  if GR = 0 then print "INVALID": goto pf_shot
+  ApplyShot(1, GR, GC)
+  DrawRadar()
+  print
+  if HT = 2 then print "ALREADY SHOT": goto pf_shot
+  if HT = 0 then print "MISS": sound 1, 2
+  if HT = 1 then print "HIT!": sound 100, 3
+  if HT = 3 then print "SUNK ";
+  if HT = 3 then PrintShipName(SID)
+  if HT = 3 then print
+  if HT = 3 then sound 150, 4
+  for w = 1 to 200
+  next w
+  return
+
+pf_fleet:
+  DrawOwnFleet()
+  PauseEnter("PRESS ENTER: ")
+  goto pf_shot
+end
+
+procedure AiPickShot()
+  ' Sets AR, AC — never RETURN from inside FOR
+  found = 0
+  if Hunt = 0 then goto ai_rnd
+  d = 1
+ai_nb:
+  tr = HR
+  tc = HC
+  if d = 1 then tr = HR - 1
+  if d = 2 then tr = HR + 1
+  if d = 3 then tc = HC - 1
+  if d = 4 then tc = HC + 1
+  if tr < 1 then goto ai_nx
+  if tr > 10 then goto ai_nx
+  if tc < 1 then goto ai_nx
+  if tc > 10 then goto ai_nx
+  if AK(tr, tc) = 0 then AR = tr: AC = tc: found = 1: d = 99
+ai_nx:
+  d = d + 1
+  if d <= 4 then goto ai_nb
+  if found = 1 then return
+  Hunt = 0
+
+ai_rnd:
+  tries = 0
+ai_lp:
+  tries = tries + 1
+  AR = rnd(10)
+  AC = rnd(10)
+  if AK(AR, AC) = 0 then found = 1: return
+  if tries < 200 then goto ai_lp
+
+  ' full scan — force loop end when found (no RETURN inside FOR)
+  for AR = 1 to 10
+    for AC = 1 to 10
+      if found = 0 then if AK(AR, AC) = 0 then found = 1: sr = AR: sc = AC: AC = 10: AR = 10
+    next AC
+  next AR
+  if found = 1 then AR = sr: AC = sc
+end
+
+procedure ComputerFires()
+  DrawOwnFleet()
+  print
+  print "COMPUTER FIRES..."
+  for w = 1 to 80
+  next w
+  AiPickShot()
+  ApplyShot(0, AR, AC)
+  DrawOwnFleet()
+  print
+  print "AT "; chr$(64 + AR);
+  if AC < 10 then print mid$(str$(AC), 2)
+  if AC = 10 then print "10"
+  if HT = 0 then print "COMPUTER MISS": sound 1, 1
+  if HT = 1 then print "COMPUTER HIT!": sound 50, 3: Hunt = 1: HR = AR: HC = AC
+  if HT = 3 then print "SANK YOUR ";
+  if HT = 3 then PrintShipName(SID)
+  if HT = 3 then print
+  if HT = 3 then sound 30, 5: Hunt = 0
+  for w = 1 to 200
+  next w
+end
+
+procedure BattleLoop()
+bl_top:
+  if EH <= 0 then return
+  if PH <= 0 then return
+  PlayerFires()
+  if EH <= 0 then return
+  ComputerFires()
+  if PH <= 0 then return
+  goto bl_top
+end
+
+' GameOver lives inline at the end of Main (avoids final GOSUB/RETURN).

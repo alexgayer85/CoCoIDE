@@ -1,0 +1,11 @@
+{
+  "name": "diag_fixture",
+  "target": "coco2",
+  "memory_kb": 64,
+  "dialect": "decb",
+  "entry": "src/main.mbas",
+  "disk_image": "build/work.dsk",
+  "auto_run": true,
+  "preprocessor": true,
+  "standalone": []
+}

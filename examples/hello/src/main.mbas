@@ -1,0 +1,20 @@
+@target coco3, 512k, decb
+@start 100
+@step 10
+
+' Hello sample — entry file
+@include "greet.mbas"
+
+procedure Main()
+  cls
+  title$ = "COCOIDE"
+  print title$
+  print "DISK EXTENDED / COCO 3"
+  print
+  Greet("WORLD")
+  print
+  print
+  print "(BUILT BY COCOIDE)"
+  print "ALEX GAYER, 2026"
+end
+

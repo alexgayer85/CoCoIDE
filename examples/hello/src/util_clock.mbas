@@ -1,0 +1,14 @@
+@standalone CLOCK.BAS
+@start 100
+@step 10
+
+' Standalone utility — separate program on disk (not merged into MAIN).
+' From DECB: RUN"CLOCK"
+
+procedure Main()
+  cls
+  print "CLOCK UTILITY"
+  print "(standalone demo)"
+  print
+  print "TICK..."
+end

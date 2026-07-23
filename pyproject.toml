@@ -1,0 +1,22 @@
+[project]
+name = "cocoide"
+version = "0.1.0"
+description = "Tandy Color Computer IDE — DECB, XRoar, Toolshed, modern BASIC preprocessor"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "CoCoIDE contributors" }]
+dependencies = [
+    "PySide6>=6.6",
+]
+
+[project.scripts]
+cocoide = "cocoide.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cocoide*"]

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.log
+
+# Generated CoCo build artifacts (sources live under src/)
+**/build/*.dsk
+**/build/*.bas
+**/build/*.bin
+**/build/*.log

@@ -1,0 +1,41 @@
+@target coco3, 512k, decb
+@start 100
+@step 10
+
+' ============================================================
+'  SEA BATTLE — CoCoIDE example
+'  Original game inspired by the classic grid naval board game
+'  (not affiliated with Hasbro / Milton Bradley)
+'
+'  10x10 grid · five ships · you vs computer
+'  Build Disk → Run in XRoar
+' ============================================================
+
+@include "ships.mbas"
+@include "grid.mbas"
+@include "ai.mbas"
+
+procedure Main()
+  ' CLEAR only here, at the top of Main (entered via GOTO, not GOSUB).
+  ' CLEAR resets the GOSUB stack — never call it inside a nested GOSUB.
+  clear 400
+  cls
+  TitleScreen()
+  InitGame()
+  PlacePlayerFleet()
+  PlaceEnemyFleet()
+  BattleLoop()
+  ' Game-over is INLINE (not GOSUB) so a dirty stack cannot ?RG on final RETURN.
+  cls
+  print
+  print "     GAME OVER"
+  print
+  if EH <= 0 then print "  YOU WIN!": sound 120, 3: sound 150, 3
+  if PH <= 0 then if EH > 0 then print "  YOU LOSE": sound 20, 8
+  print
+  print "  ENEMY LEFT:"; EH
+  print "  YOUR  LEFT:"; PH
+  print
+  print "  PRESS ENTER: ";
+  input z$
+end

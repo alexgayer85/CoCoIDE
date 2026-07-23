@@ -1,0 +1,5 @@
+' Included module — not a separate disk program unless @standalone
+
+procedure Greet(who$)
+  print "HELLO, "; who$
+end

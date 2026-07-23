@@ -1,0 +1,12 @@
+{
+  "name": "sudoku",
+  "target": "coco3",
+  "memory_kb": 512,
+  "dialect": "decb",
+  "entry": "src/imported/sudoku.bas",
+  "disk_image": "build/work.dsk",
+  "auto_run": true,
+  "preprocessor": false,
+  "standalone": [],
+  "roms": {}
+}

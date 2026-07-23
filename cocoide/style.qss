@@ -1,0 +1,206 @@
+/* CoCoIDE — dark amber theme
+ *
+ * Applied only to MainWindow (not QApplication), so QFileDialog stays
+ * native (KDE/GNOME/Windows) with proper toolbar icons.
+ */
+
+QMainWindow {
+    font-family: "Segoe UI", "Ubuntu", "Noto Sans", sans-serif;
+    font-size: 13px;
+    background-color: #1a1d23;
+    color: #e8eaed;
+}
+
+/* Main window chrome only — avoid restyling platform file dialogs */
+QMainWindow QWidget {
+    background-color: #1a1d23;
+    color: #e8eaed;
+}
+
+QToolBar {
+    background-color: #22262e;
+    border-bottom: 1px solid #2e3440;
+    spacing: 4px;
+    padding: 4px;
+}
+
+QToolButton, QPushButton {
+    background-color: #2a2f3a;
+    color: #e8eaed;
+    border: 1px solid #3a4150;
+    border-radius: 5px;
+    padding: 5px 12px;
+}
+
+QToolButton:hover, QPushButton:hover {
+    border-color: #f48c06;
+    background-color: #323844;
+}
+
+QPushButton#primaryButton {
+    background-color: #e85d04;
+    color: #1a1008;
+    font-weight: 600;
+    border: none;
+}
+
+QPushButton#primaryButton:hover {
+    background-color: #f48c06;
+}
+
+QTreeWidget, QListWidget, QPlainTextEdit, QTextEdit {
+    background-color: #161920;
+    border: 1px solid #2e3440;
+    border-radius: 4px;
+    color: #c8cdd6;
+    selection-background-color: rgba(232, 93, 4, 0.35);
+}
+
+QPlainTextEdit#editor {
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "Ubuntu Mono", monospace;
+    font-size: 13px;
+}
+
+QTreeWidget::item:selected, QListWidget::item:selected {
+    background-color: rgba(232, 93, 4, 0.2);
+    color: #f48c06;
+}
+
+QHeaderView::section {
+    background-color: #22262e;
+    color: #9aa3b2;
+    border: none;
+    padding: 4px;
+}
+
+QDockWidget {
+    titlebar-close-icon: none;
+    color: #9aa3b2;
+}
+
+QDockWidget::title {
+    background-color: #22262e;
+    padding: 6px;
+    border-bottom: 1px solid #2e3440;
+}
+
+QStatusBar {
+    background-color: #1e222a;
+    color: #6b7380;
+    border-top: 1px solid #2e3440;
+}
+
+QLabel#chip {
+    background-color: #161920;
+    border: 1px solid rgba(61, 204, 133, 0.4);
+    border-radius: 10px;
+    color: #3dcc85;
+    padding: 3px 10px;
+    font-family: "JetBrains Mono", "Ubuntu Mono", monospace;
+    font-size: 11px;
+}
+
+QLabel#chipDisk {
+    background-color: #161920;
+    border: 1px solid #3a4150;
+    border-radius: 10px;
+    color: #e8eaed;
+    padding: 3px 10px;
+    font-family: "JetBrains Mono", "Ubuntu Mono", monospace;
+    font-size: 11px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #2e3440;
+    background-color: #161920;
+}
+
+QTabBar::tab {
+    background-color: #22262e;
+    color: #9aa3b2;
+    padding: 6px 12px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #161920;
+    color: #e8eaed;
+}
+
+QSplitter::handle {
+    background-color: #2e3440;
+    width: 2px;
+    height: 2px;
+}
+
+QMenuBar {
+    background-color: #22262e;
+    color: #e8eaed;
+}
+
+QMenuBar::item:selected {
+    background-color: #2a2f3a;
+}
+
+QMenu {
+    background-color: #22262e;
+    border: 1px solid #3a4150;
+}
+
+QMenu::item:selected {
+    background-color: rgba(232, 93, 4, 0.25);
+}
+
+/* Disk free/used meter (UI sketch bar graph) */
+QProgressBar#diskBar {
+    background-color: #161920;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    max-height: 10px;
+    min-height: 10px;
+    text-align: center;
+}
+
+QProgressBar#diskBar::chunk {
+    border-radius: 3px;
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #3dcc85,
+        stop:1 #f48c06
+    );
+}
+
+QProgressBar#diskBar[level="ok"]::chunk {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #3dcc85,
+        stop:1 #6dd4a0
+    );
+}
+
+QProgressBar#diskBar[level="warn"]::chunk {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #e6b84d,
+        stop:1 #f48c06
+    );
+}
+
+QProgressBar#diskBar[level="critical"]::chunk {
+    background-color: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #e85a5a,
+        stop:1 #e85d04
+    );
+}
+
+QProgressBar#diskBar[level="empty"]::chunk {
+    background-color: transparent;
+}
+
+QListWidget#problemsList {
+    font-family: "JetBrains Mono", "Ubuntu Mono", "Fira Code", monospace;
+    font-size: 12px;
+}
