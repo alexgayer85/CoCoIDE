@@ -213,6 +213,12 @@ pp_in
         lbeq    pp_auto
         cmpa    #'0
         lbeq    pp_auto
+        cmpa    #'1
+        lbeq    pp_auto
+        cmpa    #'U
+        lbeq    pp_auto
+        cmpa    #'u
+        lbeq    pp_auto
         cmpa    #32
         lbeq    pp_put
         cmpa    #13
@@ -295,16 +301,12 @@ pp_bad
         lbsr    Beep
         lbra    pp_in
 pp_auto
-        * wipe player grid then place fleet (always succeeds)
-        ldx     #PS
-        lbsr    Clear100
-        lda     #0
-        lbsr    AutoPlaceFleet
+        * Direct grid pokes only — no nested place routines (P must never hang)
+        lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
         lda     #1
         lbsr    Beep
-        * fall through — no silent WaitKey (looked like a freeze)
 pp_done
         lbsr    DrawBoardsOnly
         lda     #1
@@ -334,77 +336,98 @@ PlaceEnemyFleet
         rts
 
 ***********************************************************************
-* Auto place A=grid (0=PS player, 1=ES enemy).
-* Fully linear: fixed coordinates, no search loops that can spin.
-* Layout (horizontal):
-*   id1 len5 @ r1c1  id2 len4 @ r2c1  id3 len3 @ r3c1
-*   id4 len3 @ r4c1  id5 len2 @ r5c1
+* Auto-place player fleet: raw stores into PS[10][10] row-major.
+* Rows 0..4, each ship starting at column 0. Cannot hang.
 ***********************************************************************
-AutoPlaceFleet
-        sta     PlaceGrid
-        * ship 1
+AutoPlacePlayer
+        ldx     #PS
+        ldb     #100
+app_cl  clr     ,x+
+        decb
+        bne     app_cl
+        * row 0: ship 1 length 5
+        ldx     #PS
         lda     #1
-        sta     ShipId
-        lda     #1
-        sta     TmpR
-        sta     TmpC
-        sta     Horiz
-        lda     #5
-        sta     TmpL
-        lbsr    ap_put
-        * ship 2
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        * row 1: ship 2 length 4  (PS+10)
+        ldx     #PS
+        leax    10,x
         lda     #2
-        sta     ShipId
-        lda     #2
-        sta     TmpR
-        lda     #1
-        sta     TmpC
-        sta     Horiz
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        * row 2: ship 3 length 3
+        ldx     #PS
+        leax    20,x
+        lda     #3
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        * row 3: ship 4 length 3
+        ldx     #PS
+        leax    30,x
         lda     #4
-        sta     TmpL
-        lbsr    ap_put
-        * ship 3
-        lda     #3
-        sta     ShipId
-        lda     #3
-        sta     TmpR
-        lda     #1
-        sta     TmpC
-        sta     Horiz
-        lda     #3
-        sta     TmpL
-        lbsr    ap_put
-        * ship 4
-        lda     #4
-        sta     ShipId
-        lda     #4
-        sta     TmpR
-        lda     #1
-        sta     TmpC
-        sta     Horiz
-        lda     #3
-        sta     TmpL
-        lbsr    ap_put
-        * ship 5
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        * row 4: ship 5 length 2
+        ldx     #PS
+        leax    40,x
         lda     #5
-        sta     ShipId
-        lda     #5
-        sta     TmpR
-        lda     #1
-        sta     TmpC
-        sta     Horiz
-        lda     #2
-        sta     TmpL
-        lbsr    ap_put
+        sta     ,x+
+        sta     ,x+
         rts
 
-* Place current ship at TmpR/TmpC/Horiz/TmpL into PlaceGrid (no CanPlace)
-ap_put
-        lda     PlaceGrid
-        sta     TmpG
-        lbra    PlaceShipRaw
+***********************************************************************
+* Auto-place enemy fleet into ES (mirror of player layout)
+***********************************************************************
+AutoPlaceFleet
+        * A=grid ignored for enemy path when called with 1 from PlaceEnemy
+        * Always fill ES the same way
+        ldx     #ES
+        ldb     #100
+ape_cl  clr     ,x+
+        decb
+        bne     ape_cl
+        ldx     #ES
+        lda     #1
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        ldx     #ES
+        leax    10,x
+        lda     #2
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        ldx     #ES
+        leax    20,x
+        lda     #3
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        ldx     #ES
+        leax    30,x
+        lda     #4
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        ldx     #ES
+        leax    40,x
+        lda     #5
+        sta     ,x+
+        sta     ,x+
+        rts
 
-* ShipId (1..5) → B = length from LenTab
+* ShipId (1..5) → B = length
 ShipLen
         pshs    a,x
         lda     ShipId
@@ -1544,6 +1567,7 @@ wkg     ldd     KTimer
         std     KTimer
         bne     wkg
         lda     KChar
+        anda    #$7F            ; strip high bit if any
         rts
 
 
