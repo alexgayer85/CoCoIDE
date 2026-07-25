@@ -1177,6 +1177,7 @@ dn2     pshs    a
         sta     TX
         rts
 
+* 5x7 font, column-major, bit7=top. Index = ASCII-32, glyphs 32..90 only.
 DrawChar
         sta     CX
         stb     CY
@@ -1185,21 +1186,21 @@ DrawChar
         blo     dcup
         cmpa    #'z
         bhi     dcup
-        suba    #32
+        suba    #32             ; a-z → A-Z
 dcup    cmpa    #32
         blo     dcz
-        cmpa    #91
+        cmpa    #91             ; reject >= '['
         bhs     dcz
-        suba    #32
+        suba    #32             ; 0..58
         ldb     #5
-        mul
-        tfr     d,x
-        leax    Font,x
+        mul                     ; D = glyph offset
+        ldx     #Font
+        leax    d,x             ; X → 5 column bytes
         lda     #5
         sta     TmpL
 dc_col  lda     ,x+
         sta     TmpB
-        lda     #8
+        lda     #7              ; 7 rows used (bit7..bit1)
         sta     TmpI
         lda     CY
         sta     PY
@@ -1383,30 +1384,28 @@ rn1     lda     #1
         rts
 
 ***********************************************************************
-* 5x7 font for ASCII 32-90 (only some used; rest blank)
-* 5 columns per char, bit7=top of column
+* 5x7 font ASCII 32..90 inclusive (59 glyphs x 5 cols). bit7 = top.
+* Counts: 16 punct (32-47) + 10 digits + 7 (:..@) + 26 letters = 59
 ***********************************************************************
 Font
-        * space 32
+        * 32 space .. 47 /
         fcb     0,0,0,0,0
-        * ! through / minimal blanks + digits
         fcb     0,0,$5F,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        * 0-9 at 48: index (48-32)*5 = 80
+        fcb     0,7,0,7,0
+        fcb     $14,$7F,$14,$7F,$14
+        fcb     $24,$2A,$7F,$2A,$12
+        fcb     $23,$13,$08,$64,$62
+        fcb     $36,$49,$55,$22,$50
+        fcb     0,5,3,0,0
+        fcb     0,$1C,$22,$41,0
+        fcb     0,$41,$22,$1C,0
+        fcb     $14,$08,$3E,$08,$14
+        fcb     $08,$08,$3E,$08,$08
+        fcb     0,$50,$30,0,0
+        fcb     $08,$08,$08,$08,$08
+        fcb     0,$60,$60,0,0
+        fcb     $20,$10,$08,$04,$02
+        * 48-57 digits 0-9
         fcb     $3E,$51,$49,$45,$3E
         fcb     0,$42,$7F,$40,0
         fcb     $42,$61,$51,$49,$46
@@ -1417,15 +1416,15 @@ Font
         fcb     $01,$71,$09,$05,$03
         fcb     $36,$49,$49,$49,$36
         fcb     $06,$49,$49,$29,$1E
-        * : ; < = > ? @
+        * 58-64 : ; < = > ? @
         fcb     0,$36,$36,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        fcb     0,0,0,0,0
-        * A-Z
+        fcb     0,$56,$36,0,0
+        fcb     $08,$14,$22,$41,0
+        fcb     $14,$14,$14,$14,$14
+        fcb     0,$41,$22,$14,$08
+        fcb     $02,$01,$51,$09,$06
+        fcb     $32,$49,$79,$41,$3E
+        * 65-90 A-Z
         fcb     $7E,$11,$11,$11,$7E
         fcb     $7F,$49,$49,$49,$36
         fcb     $3E,$41,$41,$41,$22
@@ -1482,7 +1481,7 @@ TMComp  fcn     "COMPUTER..."
 TMComp2 fcn     "COMP DONE KEY"
 TWin    fcn     "YOU WIN!"
 TLose   fcn     "YOU LOSE"
-TmpCh   fcn     "0"
+TmpCh   zmb     1
 
 ***********************************************************************
 * Variables (in LOADM image)
