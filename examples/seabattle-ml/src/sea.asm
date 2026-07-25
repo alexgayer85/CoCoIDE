@@ -295,16 +295,20 @@ pp_bad
         lbsr    Beep
         lbra    pp_in
 pp_auto
+        * wipe player grid then place fleet (always succeeds)
+        ldx     #PS
+        lbsr    Clear100
         lda     #0
         lbsr    AutoPlaceFleet
         lda     #6
         sta     ShipId
         lda     #1
         lbsr    Beep
+        * fall through — no silent WaitKey (looked like a freeze)
 pp_done
         lbsr    DrawBoardsOnly
-        * skip slow DrawStr banner — one short beep means ready
-        lbsr    WaitKey
+        lda     #1
+        lbsr    Beep
         rts
 
 DrawPlaceHUD
@@ -330,69 +334,77 @@ PlaceEnemyFleet
         rts
 
 ***********************************************************************
-* Auto place A=grid — deterministic (no random hang).
-* Places ships horizontally on rows 1..5 starting at column 1.
-* Empty board always succeeds; occupied board scans rows/cols.
+* Auto place A=grid (0=PS player, 1=ES enemy).
+* Fully linear: fixed coordinates, no search loops that can spin.
+* Layout (horizontal):
+*   id1 len5 @ r1c1  id2 len4 @ r2c1  id3 len3 @ r3c1
+*   id4 len3 @ r4c1  id5 len2 @ r5c1
 ***********************************************************************
 AutoPlaceFleet
         sta     PlaceGrid
+        * ship 1
         lda     #1
         sta     ShipId
-ap_s    lda     ShipId
-        cmpa    #6
-        lbhs    ap_x
-        lbsr    ShipLen
-        stb     TmpL
-        lda     #1
-        sta     Horiz           ; always horizontal first
-        lda     ShipId
-        sta     TmpR            ; prefer row = ship id
-        lda     #1
-        sta     TmpC
-        lbsr    ap_try
-        bcs     ap_ok
-        * scan all cells for a fit
         lda     #1
         sta     TmpR
-ap_rr   lda     #1
         sta     TmpC
-ap_cc   lda     #1
         sta     Horiz
-        lbsr    ap_try
-        bcs     ap_ok
-        clr     Horiz
-        lbsr    ap_try
-        bcs     ap_ok
-        inc     TmpC
-        lda     TmpC
-        cmpa    #11
-        blo     ap_cc
-        inc     TmpR
-        lda     TmpR
-        cmpa    #11
-        blo     ap_rr
-        * give up this ship
-        bra     ap_next
-ap_ok   lda     PlaceGrid
-        ldb     ShipId
-        lbsr    PlaceShip
-ap_next inc     ShipId
-        bra     ap_s
-ap_x    rts
+        lda     #5
+        sta     TmpL
+        lbsr    ap_put
+        * ship 2
+        lda     #2
+        sta     ShipId
+        lda     #2
+        sta     TmpR
+        lda     #1
+        sta     TmpC
+        sta     Horiz
+        lda     #4
+        sta     TmpL
+        lbsr    ap_put
+        * ship 3
+        lda     #3
+        sta     ShipId
+        lda     #3
+        sta     TmpR
+        lda     #1
+        sta     TmpC
+        sta     Horiz
+        lda     #3
+        sta     TmpL
+        lbsr    ap_put
+        * ship 4
+        lda     #4
+        sta     ShipId
+        lda     #4
+        sta     TmpR
+        lda     #1
+        sta     TmpC
+        sta     Horiz
+        lda     #3
+        sta     TmpL
+        lbsr    ap_put
+        * ship 5
+        lda     #5
+        sta     ShipId
+        lda     #5
+        sta     TmpR
+        lda     #1
+        sta     TmpC
+        sta     Horiz
+        lda     #2
+        sta     TmpL
+        lbsr    ap_put
+        rts
 
-* Try CanPlace at TmpR/TmpC/Horiz/TmpL/PlaceGrid → CS if ok
-ap_try
+* Place current ship at TmpR/TmpC/Horiz/TmpL into PlaceGrid (no CanPlace)
+ap_put
         lda     PlaceGrid
         sta     TmpG
-        lbsr    CanPlace
-        lda     CP
-        bne     ap_ty
-        andcc   #$FE            ; clear C = fail
-        rts
-ap_ty   orcc    #$01            ; set C = ok
-        rts
+        lbra    PlaceShipRaw
 
-* ShipId (1..5) → B = length. Uses fixed table (not fragile BSS index).
+* ShipId (1..5) → B = length from LenTab
 ShipLen
         pshs    a,x
         lda     ShipId
@@ -400,7 +412,7 @@ ShipLen
         cmpa    #5
         bls     sl1
         lda     #5
-sl1     deca                    ; 0..4
+sl1     deca
         leax    LenTab,pcr
         lda     a,x
         tfr     a,b
@@ -459,6 +471,8 @@ PlaceShip
         stb     ShipId
         lbsr    ShipLen
         stb     TmpL
+PlaceShipRaw
+        * uses TmpG, ShipId, TmpR, TmpC, Horiz, TmpL
         clr     TmpI
 psl     lda     TmpI
         cmpa    TmpL
