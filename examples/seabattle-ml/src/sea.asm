@@ -1180,7 +1180,8 @@ dn2     pshs    a
         sta     TX
         rts
 
-* 5x7 font, column-major, bit7=top. Index = ASCII-32, glyphs 32..90 only.
+* 5x7 font, column-major, bit0=TOP of column (bit1 = next row down, …).
+* Index = ASCII-32, glyphs 32..90 only.
 DrawChar
         sta     CX
         stb     CY
@@ -1203,17 +1204,17 @@ dcup    cmpa    #32
         sta     TmpL
 dc_col  lda     ,x+
         sta     TmpB
-        lda     #7              ; 7 rows used (bit7..bit1)
+        lda     #7              ; rows: bit0 .. bit6
         sta     TmpI
         lda     CY
         sta     PY
 dc_row  lda     TmpB
-        bita    #$80
+        bita    #$01            ; LSB = top of glyph
         beq     dc_s
         lda     CX
         ldb     PY
         lbsr    Plot2
-dc_s    lsl     TmpB
+dc_s    lsr     TmpB            ; next row down
         inc     PY
         dec     TmpI
         bne     dc_row
@@ -1387,7 +1388,7 @@ rn1     lda     #1
         rts
 
 ***********************************************************************
-* 5x7 font ASCII 32..90 inclusive (59 glyphs x 5 cols). bit7 = top.
+* 5x7 font ASCII 32..90 (59 glyphs x 5 cols). Column-major; bit0 = TOP.
 * Counts: 16 punct (32-47) + 10 digits + 7 (:..@) + 26 letters = 59
 ***********************************************************************
 Font
