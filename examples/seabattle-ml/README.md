@@ -19,11 +19,14 @@ Click the **XRoar window** so it has keyboard focus.
 
 | Key | Action |
 |-----|--------|
-| **W A S D** | Move cursor |
+| **W S** | Move cursor up / down |
+| **J L** or **D** | Move left / right (`A` = auto-place, not left) |
 | **Space** or **Enter** | Fire (battle) / place ship |
 | **R** | Rotate ship (placement) |
 | **A** | Auto-place your remaining fleet |
-| **F** | Redraw boards (battle) |
+| **F** | Full redraw (battle) |
+
+Cursor moves **without** redrawing the whole screen (only the cursor cell).
 
 After HIT / MISS / computer turn, press **any key** (or wait — there is a timeout so the game cannot freeze forever).
 

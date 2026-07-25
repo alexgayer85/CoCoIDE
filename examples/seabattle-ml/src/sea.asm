@@ -26,14 +26,14 @@ GFX     equ     $0E00
 GROWS   equ     192
 GBPL    equ     32              ; bytes per line
 
-* Board geometry (pixels)
-CELL    equ     10
-* Left fleet board top-left of cell (0,0)
+* Board geometry — CELL=8 so each cell row is exactly one PM4 byte (fast)
+CELL    equ     8
+* Left fleet board (X must stay multiple of 8)
 LX0     equ     16
-LY0     equ     28
+LY0     equ     24
 * Right radar board
 RX0     equ     144
-RY0     equ     28
+RY0     equ     24
 
         org     $3F00
 
@@ -136,7 +136,7 @@ pp_loop
         cmpa    #6
         lbhs    pp_done
 pp_draw
-        lbsr    DrawBattle      ; left=PS right=RD (empty)
+        lbsr    DrawBattle      ; full redraw only when board content changes
         lbsr    DrawPlaceHUD
         lbsr    DrawCursorLeft
 pp_in
@@ -149,32 +149,35 @@ pp_in
         lbeq    pp_rot
         cmpa    #'r
         lbeq    pp_rot
-        cmpa    #9              ; right arrow (some ROMs) — also D
+        cmpa    #9
         lbeq    pp_r
         cmpa    #'D
         lbeq    pp_r
         cmpa    #'d
         lbeq    pp_r
-        cmpa    #8              ; left / BS / A
+        cmpa    #'L
+        lbeq    pp_r
+        cmpa    #'l
+        lbeq    pp_r
+        cmpa    #8
         lbeq    pp_l
-        cmpa    #'A
-        beq     pp_lskip        ; A is auto — already handled
-pp_lskip
+        cmpa    #'J
+        lbeq    pp_l
+        cmpa    #'j
+        lbeq    pp_l
         cmpa    #'S
-        lbeq    pp_d
+        lbeq    pp_dn
         cmpa    #'s
-        lbeq    pp_d
-        cmpa    #10             ; down
-        lbeq    pp_d
+        lbeq    pp_dn
+        cmpa    #10
+        lbeq    pp_dn
         cmpa    #'W
         lbeq    pp_u
         cmpa    #'w
         lbeq    pp_u
-        cmpa    #94             ; up arrow often
-        lbeq    pp_u
-        cmpa    #32             ; space
+        cmpa    #32
         lbeq    pp_put
-        cmpa    #13             ; enter
+        cmpa    #13
         lbeq    pp_put
         lbra    pp_in
 pp_rot
@@ -185,23 +188,31 @@ pp_rot
 pp_r    lda     CurC
         cmpa    #10
         lbhs    pp_in
+        lbsr    UndrawCursorLeft
         inc     CurC
-        lbra    pp_draw
+        lbsr    DrawCursorLeft
+        lbra    pp_in
 pp_l    lda     CurC
         cmpa    #1
         lbls    pp_in
+        lbsr    UndrawCursorLeft
         dec     CurC
-        lbra    pp_draw
-pp_d    lda     CurR
+        lbsr    DrawCursorLeft
+        lbra    pp_in
+pp_dn   lda     CurR
         cmpa    #10
         lbhs    pp_in
+        lbsr    UndrawCursorLeft
         inc     CurR
-        lbra    pp_draw
+        lbsr    DrawCursorLeft
+        lbra    pp_in
 pp_u    lda     CurR
         cmpa    #1
         lbls    pp_in
+        lbsr    UndrawCursorLeft
         dec     CurR
-        lbra    pp_draw
+        lbsr    DrawCursorLeft
+        lbra    pp_in
 pp_put
         lda     CurR
         sta     TmpR
@@ -226,11 +237,10 @@ pp_put
 pp_bad
         lda     #0
         lbsr    Beep
-        lbra    pp_draw
+        lbra    pp_in
 pp_auto
         lda     #0
         lbsr    AutoPlaceFleet
-        ; mark all ships placed
         lda     #6
         sta     ShipId
         lda     #1
@@ -457,11 +467,15 @@ pt_i    lbsr    WaitKey
         lbeq    pt_r
         cmpa    #'d
         lbeq    pt_r
+        cmpa    #'L
+        lbeq    pt_r
+        cmpa    #'l
+        lbeq    pt_r
         cmpa    #9
         lbeq    pt_r
-        cmpa    #'A
+        cmpa    #'J
         lbeq    pt_l
-        cmpa    #'a
+        cmpa    #'j
         lbeq    pt_l
         cmpa    #8
         lbeq    pt_l
@@ -483,23 +497,31 @@ pt_i    lbsr    WaitKey
 pt_r    lda     CurC
         cmpa    #10
         lbhs    pt_i
+        lbsr    UndrawCursorRight
         inc     CurC
-        lbra    pt_d
+        lbsr    DrawCursorRight
+        lbra    pt_i
 pt_l    lda     CurC
         cmpa    #1
         lbls    pt_i
+        lbsr    UndrawCursorRight
         dec     CurC
-        lbra    pt_d
+        lbsr    DrawCursorRight
+        lbra    pt_i
 pt_dn   lda     CurR
         cmpa    #10
         lbhs    pt_i
+        lbsr    UndrawCursorRight
         inc     CurR
-        lbra    pt_d
+        lbsr    DrawCursorRight
+        lbra    pt_i
 pt_up   lda     CurR
         cmpa    #1
         lbls    pt_i
+        lbsr    UndrawCursorRight
         dec     CurR
-        lbra    pt_d
+        lbsr    DrawCursorRight
+        lbra    pt_i
 pt_fire
         lda     CurR
         sta     TmpR
@@ -507,7 +529,20 @@ pt_fire
         sta     TmpC
         lda     #1
         lbsr    ApplyShot
-        lbsr    DrawBattle
+        * refresh only the shot cell on radar (fast)
+        lda     #1
+        sta     BoardWhich
+        lda     #RX0
+        sta     BX0
+        lda     #RY0
+        sta     BY0
+        lda     CurR
+        sta     RR
+        lda     CurC
+        sta     CC
+        lbsr    DrawOneCell
+        lbsr    DrawCursorRight
+        lbsr    DrawScores
         lda     HT
         cmpa    #2
         lbeq    pt_al
@@ -528,7 +563,7 @@ pt_al   leax    TMAlr,pcr
         lda     #0
         lbsr    Beep
         lbsr    WaitKey
-        lbra    pt_d
+        lbra    pt_i
 pt_msg  lda     #8
         ldb     #180
         lbsr    DrawStr
@@ -557,7 +592,19 @@ ComputerTurn
         sta     TmpC
         clra
         lbsr    ApplyShot
-        lbsr    DrawBattle
+        * refresh only the hit cell on player fleet
+        lda     #0
+        sta     BoardWhich
+        lda     #LX0
+        sta     BX0
+        lda     #LY0
+        sta     BY0
+        lda     AR
+        sta     RR
+        lda     AC
+        sta     CC
+        lbsr    DrawOneCell
+        lbsr    DrawScores
         leax    TMComp2,pcr
         lda     #8
         ldb     #180
@@ -834,11 +881,10 @@ gow     lda     #80
         rts
 
 ***********************************************************************
-* Draw PMODE 4 dual boards
+* Draw PMODE 4 dual boards (byte-aligned CELL=8 for speed)
 ***********************************************************************
 DrawBattle
         lbsr    GfxCls
-        * left PS
         lda     #0
         sta     BoardWhich
         lda     #LX0
@@ -846,7 +892,6 @@ DrawBattle
         lda     #LY0
         sta     BY0
         lbsr    DrawOneBoard
-        * right RD
         lda     #1
         sta     BoardWhich
         lda     #RX0
@@ -854,7 +899,21 @@ DrawBattle
         lda     #RY0
         sta     BY0
         lbsr    DrawOneBoard
-        * scores
+        lbsr    DrawBattleHUD
+        lbsr    DrawScores
+        rts
+
+DrawScores
+        * wipe score strip then draw (avoid ghost digits)
+        lda     #0
+        sta     RX
+        lda     #168
+        sta     RY
+        lda     #120
+        sta     Wd
+        lda     #8
+        sta     Ht
+        lbsr    ClearRectFast
         leax    TScE,pcr
         lda     #8
         ldb     #168
@@ -867,24 +926,35 @@ DrawBattle
         lbsr    DrawNum
         rts
 
-* BoardWhich 0=PS fleet glyphs 1=RD radar glyphs
 DrawOneBoard
-        * frame
         lda     BX0
         deca
         ldb     BY0
         decb
         sta     RX
         stb     RY
-        lda     #CELL*10+2
+        lda     #CELL*10+1
         sta     Wd
         sta     Ht
         lbsr    DrawRect
         lda     #1
         sta     RR
-dobr    lda     #1
+dob_r   lda     #1
         sta     CC
-dobc    lbsr    CellGlyph
+dob_c   lbsr    DrawOneCell
+        inc     CC
+        lda     CC
+        cmpa    #11
+        blo     dob_c
+        inc     RR
+        lda     RR
+        cmpa    #11
+        blo     dob_r
+        rts
+
+* DrawOneCell: BoardWhich, BX0,BY0, RR,CC
+DrawOneCell
+        lbsr    CellGlyph
         sta     GType
         lda     CC
         deca
@@ -899,16 +969,7 @@ dobc    lbsr    CellGlyph
         addb    BY0
         stb     Y0
         lbsr    DrawCell
-        inc     CC
-        lda     CC
-        cmpa    #11
-        blo     dobc
-        inc     RR
-        lda     RR
-        cmpa    #11
-        blo     dobr
         rts
-
 CellGlyph
         lda     BoardWhich
         bne     cg_r
@@ -923,7 +984,7 @@ CellGlyph
         beq     cg2
         cmpa    #7
         beq     cg3
-        lda     #1              ; ship
+        lda     #1
         rts
 cg_r    ldx     #RD
         lda     RR
@@ -943,54 +1004,94 @@ cg2     lda     #2
 cg3     lda     #3
         rts
 
-* GType: 0 empty 1 ship 2 miss 3 hit — draw CELL x CELL at X0,Y0
+* GType at X0,Y0 — CELL must be 8 and X0 multiple of 8
 DrawCell
         lda     GType
         beq     dc_empty
-        cmpa    #1
-        beq     dc_ship
         cmpa    #2
         beq     dc_miss
-        * hit = filled + cross later
-        lda     X0
-        ldb     Y0
-        sta     RX
-        stb     RY
-        lda     #CELL-1
-        sta     Wd
-        sta     Ht
-        lbsr    FillRect2
-        rts
-dc_ship
-        lda     X0
-        ldb     Y0
-        sta     RX
-        stb     RY
-        lda     #CELL-1
-        sta     Wd
-        sta     Ht
-        lbsr    FillRect2
-        rts
-dc_miss
-        * hollow circle-ish: small fill center
-        lda     X0
-        adda    #3
-        ldb     Y0
-        addb    #3
-        sta     RX
-        stb     RY
-        lda     #3
-        sta     Wd
-        sta     Ht
-        lbsr    FillRect2
-        rts
+        * ship or hit: solid byte column
+        lda     #$FF
+        bra     dc_fill
+dc_miss lda     #$18            ; small center mark pattern rows
+        bra     dc_fill_pat
 dc_empty
+        clra
+        bra     dc_fill
+dc_fill
+        sta     TmpB
+        lda     #8
+        sta     TmpI
+        lda     Y0
+        sta     PY
         lda     X0
-        adda    #4
-        ldb     Y0
-        addb    #4
-        lbsr    Plot2
+        lsra
+        lsra
+        lsra                    ; byte index
+        sta     TmpL
+dcf1    lda     PY
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        ldb     TmpL
+        abx
+        leax    GFX,x
+        lda     TmpB
+        sta     ,x
+        inc     PY
+        dec     TmpI
+        bne     dcf1
         rts
+dc_fill_pat
+        clra                    ; clear cell first
+        lbsr    dc_fill
+        lda     Y0
+        adda    #3
+        sta     PY
+        lda     #2
+        sta     TmpI
+dcmp    lda     PY
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        lda     X0
+        lsra
+        lsra
+        lsra
+        leax    a,x
+        leax    GFX,x
+        lda     #$18
+        sta     ,x
+        inc     PY
+        dec     TmpI
+        bne     dcmp
+        rts
+
+UndrawCursorLeft
+        lda     #0
+        sta     BoardWhich
+        lda     #LX0
+        sta     BX0
+        lda     #LY0
+        sta     BY0
+        lda     CurR
+        sta     RR
+        lda     CurC
+        sta     CC
+        lbra    DrawOneCell
+
+UndrawCursorRight
+        lda     #1
+        sta     BoardWhich
+        lda     #RX0
+        sta     BX0
+        lda     #RY0
+        sta     BY0
+        lda     CurR
+        sta     RR
+        lda     CurC
+        sta     CC
+        lbra    DrawOneCell
 
 DrawCursorLeft
         lda     #LX0
@@ -1016,15 +1117,17 @@ DrawCur
         mul
         addb    BY0
         stb     Y0
+        * hollow box via edges — 4 fast lines of bytes where possible
         lda     X0
         ldb     Y0
         sta     RX
         stb     RY
-        lda     #CELL-1
+        lda     #CELL
         sta     Wd
         sta     Ht
         lbsr    DrawRect
         rts
+
 
 ***********************************************************************
 ***********************************************************************
@@ -1032,12 +1135,53 @@ DrawCur
 ***********************************************************************
 GfxCls
         ldx     #GFX
-        ldy     #6144
+        ldy     #6144/2
         clra
-gc1     sta     ,x+
+        clrb
+gc1     std     ,x++
         leay    -1,y
         bne     gc1
         rts
+
+* ClearRectFast: RX,RY,Wd,Ht zeroed via Plot2 (HUD strips only — small)
+ClearRectFast
+        lda     Ht
+        beq     crfx
+        sta     TY
+        lda     RY
+        sta     PY
+crfy    lda     Wd
+        beq     crfx
+        sta     TX
+        lda     RX
+        sta     PX
+crfx1   * byte-clear if aligned span — fall back to quick row fill
+        lda     PY
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        leax    GFX,x
+        * clear bytes covering RX..RX+Wd (HUD at y=168 is fine)
+        lda     RX
+        lsra
+        lsra
+        lsra
+        leax    a,x
+        lda     Wd
+        adda    #7
+        lsra
+        lsra
+        lsra                    ; byte count rough
+        inca
+        sta     TmpI
+        clra
+crfc    sta     ,x+
+        dec     TmpI
+        bne     crfc
+        inc     PY
+        dec     TY
+        bne     crfy
+crfx    rts
 
 * Plot2: set pixel A=X (0-255), B=Y (0-191)
 * Preserves X (DrawChar walks font data in X across Plot2 calls).
@@ -1246,7 +1390,8 @@ KeyRaw
         rts
 
 KeyWaitPress
-        ldb     #$50
+        * short timeout — do not stall gameplay for seconds
+        ldb     #$18
         ldx     #0
 kwp1    lbsr    KeyRaw
         cmpa    #$7F
@@ -1260,7 +1405,7 @@ kwp1    lbsr    KeyRaw
 kwp2    rts
 
 KeyWaitRelease
-        ldb     #$30
+        ldb     #$10
         ldx     #0
 kwr1    lbsr    KeyRaw
         cmpa    #$7F
@@ -1269,7 +1414,11 @@ kwr1    lbsr    KeyRaw
         bne     kwr1
         decb
         bne     kwr1
-kwr2    rts
+kwr2    * brief settle so one physical press ≠ many moves
+        ldx     #$400
+kwrd    leax    -1,x
+        bne     kwrd
+        rts
 
 KeyDecode
         clr     ColN
