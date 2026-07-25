@@ -136,8 +136,9 @@ pp_loop
         cmpa    #6
         lbhs    pp_done
 pp_draw
-        lbsr    DrawBattle      ; full redraw only when board content changes
+        lbsr    DrawBoardsOnly  ; no battle labels (avoids overlap)
         lbsr    DrawPlaceHUD
+        lbsr    DrawScores
         lbsr    DrawCursorLeft
 pp_in
         lbsr    WaitKey
@@ -246,53 +247,32 @@ pp_auto
         lda     #1
         lbsr    Beep
 pp_done
-        lbsr    DrawBattle
+        lbsr    DrawBoardsOnly
+        lbsr    DrawPlaceHUD
         leax    TReady,pcr
-        lda     #50
+        lda     #8
         ldb     #180
         lbsr    DrawStr
         lbsr    WaitKey
         rts
 
 DrawPlaceHUD
+        * top banner only (y=2..16) — not over boards at y=24
         leax    TPlace,pcr
         lda     #8
-        ldb     #4
-        lbsr    DrawStr
-        leax    TShip,pcr
-        lda     #8
-        ldb     #14
-        lbsr    DrawStr
-        lda     ShipId
-        adda    #'0
-        sta     TmpCh
-        leax    TmpCh,pcr
-        lda     #80
-        ldb     #14
-        lbsr    DrawStr
-        leax    THV,pcr
-        lda     #100
-        ldb     #14
-        lbsr    DrawStr
-        lda     Horiz
-        beq     dph_v
-        leax    TH,pcr
-        bra     dph_w
-dph_v   leax    TV,pcr
-dph_w   lda     #160
-        ldb     #14
+        ldb     #2
         lbsr    DrawStr
         leax    THint,pcr
         lda     #8
-        ldb     #180
+        ldb     #12
         lbsr    DrawStr
         rts
 
 PlaceEnemyFleet
+        lbsr    GfxCls
         leax    TComp,pcr
         lda     #40
         ldb     #90
-        lbsr    GfxCls
         lbsr    DrawStr
         lda     #1
         lbsr    AutoPlaceFleet
@@ -455,8 +435,7 @@ bl      lda     EH
 bld     rts
 
 PlayerTurn
-pt_d    lbsr    DrawBattle
-        lbsr    DrawBattleHUD
+pt_d    lbsr    DrawBattle      ; boards + battle HUD + scores
         lbsr    DrawCursorRight
 pt_i    lbsr    WaitKey
         cmpa    #'F
@@ -881,9 +860,11 @@ gow     lda     #80
         rts
 
 ***********************************************************************
-* Draw PMODE 4 dual boards (byte-aligned CELL=8 for speed)
+* Draw PMODE 4 dual boards — ALL cell graphics are byte stores (fast).
+* Empty cell = hollow box so the 10x10 grid is always visible.
+* Cursor = XOR invert of cell (toggle twice = restore).
 ***********************************************************************
-DrawBattle
+DrawBoardsOnly
         lbsr    GfxCls
         lda     #0
         sta     BoardWhich
@@ -899,21 +880,15 @@ DrawBattle
         lda     #RY0
         sta     BY0
         lbsr    DrawOneBoard
+        rts
+
+DrawBattle
+        lbsr    DrawBoardsOnly
         lbsr    DrawBattleHUD
         lbsr    DrawScores
         rts
 
 DrawScores
-        * wipe score strip then draw (avoid ghost digits)
-        lda     #0
-        sta     RX
-        lda     #168
-        sta     RY
-        lda     #120
-        sta     Wd
-        lda     #8
-        sta     Ht
-        lbsr    ClearRectFast
         leax    TScE,pcr
         lda     #8
         ldb     #168
@@ -927,16 +902,6 @@ DrawScores
         rts
 
 DrawOneBoard
-        lda     BX0
-        deca
-        ldb     BY0
-        decb
-        sta     RX
-        stb     RY
-        lda     #CELL*10+1
-        sta     Wd
-        sta     Ht
-        lbsr    DrawRect
         lda     #1
         sta     RR
 dob_r   lda     #1
@@ -952,10 +917,19 @@ dob_c   lbsr    DrawOneCell
         blo     dob_r
         rts
 
-* DrawOneCell: BoardWhich, BX0,BY0, RR,CC
+* BoardWhich, BX0, BY0, RR, CC
 DrawOneCell
+        pshs    a,b,x
         lbsr    CellGlyph
         sta     GType
+        lbsr    CellOrigin      ; → X0,Y0 from RR,CC,BX0,BY0
+        lbsr    DrawCell
+        puls    a,b,x
+        rts
+
+* RR,CC,BX0,BY0 → X0,Y0 (preserves RR/CC)
+CellOrigin
+        pshs    a,b
         lda     CC
         deca
         ldb     #CELL
@@ -968,31 +942,33 @@ DrawOneCell
         mul
         addb    BY0
         stb     Y0
-        lbsr    DrawCell
+        puls    a,b
         rts
+
 CellGlyph
         lda     BoardWhich
         bne     cg_r
         ldx     #PS
-        lda     RR
+        bra     cg_g
+cg_r    ldx     #RD
+cg_g    lda     RR
         ldb     CC
         lbsr    CellAddr
         lda     ,x
         tsta
         beq     cg0
+        lda     BoardWhich
+        bne     cg_rad
+        * fleet: 1-5 ship, 6 miss, 7 hit
+        lda     ,x
         cmpa    #6
         beq     cg2
         cmpa    #7
         beq     cg3
         lda     #1
         rts
-cg_r    ldx     #RD
-        lda     RR
-        ldb     CC
-        lbsr    CellAddr
+cg_rad  * radar: 1 miss, 2 hit
         lda     ,x
-        tsta
-        beq     cg0
         cmpa    #1
         beq     cg2
         lda     #3
@@ -1004,53 +980,20 @@ cg2     lda     #2
 cg3     lda     #3
         rts
 
-* GType at X0,Y0 — CELL must be 8 and X0 multiple of 8
+* DrawCell: GType + X0,Y0. X0 multiple of 8, CELL=8.
+* 0 empty hollow  1 ship solid  2 miss  3 hit solid
 DrawCell
         lda     GType
-        beq     dc_empty
+        beq     dc_emp
         cmpa    #2
         beq     dc_miss
-        * ship or hit: solid byte column
-        lda     #$FF
-        bra     dc_fill
-dc_miss lda     #$18            ; small center mark pattern rows
-        bra     dc_fill_pat
-dc_empty
-        clra
-        bra     dc_fill
-dc_fill
-        sta     TmpB
-        lda     #8
-        sta     TmpI
-        lda     Y0
-        sta     PY
-        lda     X0
-        lsra
-        lsra
-        lsra                    ; byte index
-        sta     TmpL
-dcf1    lda     PY
-        ldb     #GBPL
-        mul
-        tfr     d,x
-        ldb     TmpL
-        abx
-        leax    GFX,x
-        lda     TmpB
-        sta     ,x
-        inc     PY
-        dec     TmpI
-        bne     dcf1
-        rts
-dc_fill_pat
-        clra                    ; clear cell first
-        lbsr    dc_fill
+        lda     #$FF            ; solid
+        lbra    CellFillA
+dc_miss lda     #$00
+        lbsr    CellFillA
+        * center blot
         lda     Y0
         adda    #3
-        sta     PY
-        lda     #2
-        sta     TmpI
-dcmp    lda     PY
         ldb     #GBPL
         mul
         tfr     d,x
@@ -1060,11 +1003,62 @@ dcmp    lda     PY
         lsra
         leax    a,x
         leax    GFX,x
-        lda     #$18
+        lda     #$3C
         sta     ,x
-        inc     PY
-        dec     TmpI
-        bne     dcmp
+        lda     GBPL
+        leax    a,x
+        lda     #$3C
+        sta     ,x
+        rts
+dc_emp
+        * hollow box: top/bottom $FF, sides $81
+        lbsr    CellAddrByte    ; X → first byte of cell
+        lda     #$FF
+        sta     ,x
+        ldb     #6
+        lda     #GBPL
+dce1    leax    a,x
+        pshs    a
+        lda     #$81
+        sta     ,x
+        puls    a
+        decb
+        bne     dce1
+        lda     #GBPL
+        leax    a,x
+        lda     #$FF
+        sta     ,x
+        rts
+
+* Fill 8 rows at X0,Y0 with byte in A
+CellFillA
+        sta     TmpB
+        lbsr    CellAddrByte
+        ldb     #8
+        lda     TmpB
+cfa1    sta     ,x
+        pshs    a,b
+        lda     #GBPL
+        leax    a,x
+        puls    a,b
+        decb
+        bne     cfa1
+        rts
+
+* X0,Y0 → X = &GFX + Y*32 + X/8
+CellAddrByte
+        pshs    a,b
+        lda     Y0
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        lda     X0
+        lsra
+        lsra
+        lsra
+        leax    a,x
+        leax    GFX,x
+        puls    a,b
         rts
 
 UndrawCursorLeft
@@ -1105,33 +1099,25 @@ DrawCursorRight
         lda     #RY0
         sta     BY0
 DrawCur
-        lda     CurC
-        deca
-        ldb     #CELL
-        mul
-        addb    BX0
-        stb     X0
+        * XOR invert cell under cursor (fast, no Plot2)
         lda     CurR
-        deca
-        ldb     #CELL
-        mul
-        addb    BY0
-        stb     Y0
-        * hollow box via edges — 4 fast lines of bytes where possible
-        lda     X0
-        ldb     Y0
-        sta     RX
-        stb     RY
-        lda     #CELL
-        sta     Wd
-        sta     Ht
-        lbsr    DrawRect
+        sta     RR
+        lda     CurC
+        sta     CC
+        lbsr    CellOrigin
+        lbsr    CellAddrByte
+        ldb     #8
+dcur1   lda     ,x
+        eora    #$FF
+        sta     ,x
+        lda     #GBPL
+        leax    a,x
+        decb
+        bne     dcur1
         rts
 
-
 ***********************************************************************
-***********************************************************************
-* Low-level PMODE 4 graphics (1 bpp @ GFX)
+* Low-level PMODE 4 graphics
 ***********************************************************************
 GfxCls
         ldx     #GFX
@@ -1142,46 +1128,6 @@ gc1     std     ,x++
         leay    -1,y
         bne     gc1
         rts
-
-* ClearRectFast: RX,RY,Wd,Ht zeroed via Plot2 (HUD strips only — small)
-ClearRectFast
-        lda     Ht
-        beq     crfx
-        sta     TY
-        lda     RY
-        sta     PY
-crfy    lda     Wd
-        beq     crfx
-        sta     TX
-        lda     RX
-        sta     PX
-crfx1   * byte-clear if aligned span — fall back to quick row fill
-        lda     PY
-        ldb     #GBPL
-        mul
-        tfr     d,x
-        leax    GFX,x
-        * clear bytes covering RX..RX+Wd (HUD at y=168 is fine)
-        lda     RX
-        lsra
-        lsra
-        lsra
-        leax    a,x
-        lda     Wd
-        adda    #7
-        lsra
-        lsra
-        lsra                    ; byte count rough
-        inca
-        sta     TmpI
-        clra
-crfc    sta     ,x+
-        dec     TmpI
-        bne     crfc
-        inc     PY
-        dec     TY
-        bne     crfy
-crfx    rts
 
 * Plot2: set pixel A=X (0-255), B=Y (0-191)
 * Preserves X (DrawChar walks font data in X across Plot2 calls).
