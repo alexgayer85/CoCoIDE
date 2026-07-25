@@ -63,20 +63,27 @@ InitGame
         lbsr    Clear100
         ldx     #AK
         lbsr    Clear100
+        * ship lengths / remaining (explicit stores)
+        ldx     #SL
         lda     #5
-        sta     SL
-        sta     SR
+        sta     ,x+
         lda     #4
-        sta     SL+1
-        sta     SR+1
+        sta     ,x+
         lda     #3
-        sta     SL+2
-        sta     SR+2
-        sta     SL+3
-        sta     SR+3
+        sta     ,x+
+        sta     ,x+
         lda     #2
-        sta     SL+4
-        sta     SR+4
+        sta     ,x+
+        ldx     #SR
+        lda     #5
+        sta     ,x+
+        lda     #4
+        sta     ,x+
+        lda     #3
+        sta     ,x+
+        sta     ,x+
+        lda     #2
+        sta     ,x+
         lda     #17
         sta     PH
         sta     EH
@@ -141,7 +148,9 @@ pp_draw
         lbsr    DrawScores
         lbsr    DrawCursorLeft
 pp_in
-        lbsr    WaitKey
+        lbsr    WaitKey         ; A=0 if none (ignore)
+        tsta
+        lbeq    pp_in
         cmpa    #'A
         lbeq    pp_auto
         cmpa    #'a
@@ -248,11 +257,7 @@ pp_auto
         lbsr    Beep
 pp_done
         lbsr    DrawBoardsOnly
-        lbsr    DrawPlaceHUD
-        leax    TReady,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        * skip slow DrawStr banner — one short beep means ready
         lbsr    WaitKey
         rts
 
@@ -438,6 +443,8 @@ PlayerTurn
 pt_d    lbsr    DrawBattle      ; boards + battle HUD + scores
         lbsr    DrawCursorRight
 pt_i    lbsr    WaitKey
+        tsta
+        lbeq    pt_i
         cmpa    #'F
         lbeq    pt_d
         cmpa    #'f
@@ -1314,58 +1321,92 @@ dc_s    lsr     TmpB            ; next row down
 dcz     rts
 
 ***********************************************************************
-* Matrix keyboard (no POLCAT). Timeout → Space so game never freezes.
+* Matrix keyboard — edge triggered (release → press → release).
+* Never invents Space on timeout (that was firing bogus game actions).
+* Returns A=ASCII, or A=0 if idle timeout (caller should ignore).
+*
+* Also tries ROM POLCAT as a second source (works on some XRoar setups).
 ***********************************************************************
+POLCAT  equ     $A000
+
 WaitKey
-        lbsr    KeyWaitPress
-        cmpa    #$7F
-        beq     wk_to
+        * Loop until a real key is received (never fake Space).
+        * 1) wait for release  2) wait for press  3) decode  4) wait release
+wk_start
+        lbsr    KeyWaitUp
+wk_wait_dn
+        lbsr    KeyAny
+        tsta
+        bne     wk_got
+        jsr     [POLCAT]
+        tsta
+        beq     wk_wait_dn
+        * ROM path
+        pshs    a
+        lbsr    KeyWaitUp
+        puls    a
+        cmpa    #'a
+        blo     wk_rok
+        cmpa    #'z
+        bhi     wk_rok
+        suba    #32
+wk_rok  tsta
+        beq     wk_start
+        rts
+wk_got
+        ldx     #$C0            ; debounce
+wk_db   leax    -1,x
+        bne     wk_db
         lbsr    KeyDecode
         pshs    a
-        lbsr    KeyWaitRelease
+        lbsr    KeyWaitUp
         puls    a
-        rts
-wk_to   lda     #32
+        tsta
+        beq     wk_start
         rts
 
-KeyRaw
-        lda     #$00
+* Wait until no keys (bounded)
+KeyWaitUp
+        ldb     #$28
+        ldx     #0
+kwu1    lbsr    KeyAny
+        tsta
+        beq     kwu2
+        leax    -1,x
+        bne     kwu1
+        decb
+        bne     kwu1
+kwu2    lda     #$FF
+        sta     PIA0D           ; idle columns high
+        rts
+
+* A=0 none, A!=0 some key down. Restores columns to $FF.
+KeyAny
+        pshs    b,x
+        clr     ColN
+ka1     leax    ColTab,pcr
+        lda     ColN
+        lda     a,x
         sta     PIA0D
         lda     PIA0
         anda    #$7F
-        rts
-
-KeyWaitPress
-        * short timeout — do not stall gameplay for seconds
-        ldb     #$18
-        ldx     #0
-kwp1    lbsr    KeyRaw
         cmpa    #$7F
-        bne     kwp2
-        leax    -1,x
-        bne     kwp1
-        decb
-        bne     kwp1
-        lda     #$7F
-        rts
-kwp2    rts
-
-KeyWaitRelease
-        ldb     #$10
-        ldx     #0
-kwr1    lbsr    KeyRaw
-        cmpa    #$7F
-        beq     kwr2
-        leax    -1,x
-        bne     kwr1
-        decb
-        bne     kwr1
-kwr2    * brief settle so one physical press ≠ many moves
-        ldx     #$400
-kwrd    leax    -1,x
-        bne     kwrd
+        bne     ka_yes
+        inc     ColN
+        lda     ColN
+        cmpa    #7              ; 7 columns used on CoCo
+        blo     ka1
+        clra
+        bra     ka_out
+ka_yes  lda     #1
+ka_out  pshs    a
+        lda     #$FF
+        sta     PIA0D
+        puls    a
+        puls    b,x
         rts
 
+* Decode first pressed key → ASCII (0 if none/unknown)
 KeyDecode
         clr     ColN
 kdc1    leax    ColTab,pcr
@@ -1378,22 +1419,23 @@ kdc1    leax    ColTab,pcr
         bne     kdc_hit
         inc     ColN
         lda     ColN
-        cmpa    #8
+        cmpa    #7
         blo     kdc1
-        lda     #32
-        rts
+        clra
+        bra     kdc_done
 kdc_hit sta     RowBits
-        clr     RowN
-kdc_r   lda     RowBits
-        rora
+        * invert: pressed bits become 1 for finding
+        eora    #$7F
         sta     RowBits
-        bcc     kdc_row
+        clr     RowN
+kdc_r   lsr     RowBits
+        bcs     kdc_row         ; found a 1 = pressed
         inc     RowN
         lda     RowN
         cmpa    #7
         blo     kdc_r
-        lda     #32
-        rts
+        clra
+        bra     kdc_done
 kdc_row lda     ColN
         ldb     #7
         mul
@@ -1402,18 +1444,25 @@ kdc_row lda     ColN
         tfr     d,x
         leax    KeyMap,x
         lda     ,x
+kdc_done
+        pshs    a
+        lda     #$FF
+        sta     PIA0D
+        puls    a
         rts
 
-ColTab  fcb     $FE,$FD,$FB,$F7,$EF,$DF,$BF,$7F
-KeyMap
-        fcb     '@,'A,'B,'C,'D,'E,'F
+* CoCo keyboard columns (PB0..PB6). Active-low select.
+ColTab  fcb     $FE,$FD,$FB,$F7,$EF,$DF,$BF
+*
+* KeyMap[col*7+row] — standard CoCo layout (approx; enough for game keys)
+* col0 @ A B C D E F
+KeyMap  fcb     '@,'A,'B,'C,'D,'E,'F
         fcb     'G,'H,'I,'J,'K,'L,'M
         fcb     'N,'O,'P,'Q,'R,'S,'T
         fcb     'U,'V,'W,'X,'Y,'Z,13
         fcb     '0,'1,'2,'3,'4,'5,'6
-        fcb     '7,'8,'9,32,32,32,32
-        fcb     13,32,8,9,10,32,32
-        fcb     32,32,32,32,32,32,32
+        fcb     '7,'8,'9,':,';,32,32
+        fcb     13,12,8,9,10,0,0
 
 * Sound / RNG
 ***********************************************************************
