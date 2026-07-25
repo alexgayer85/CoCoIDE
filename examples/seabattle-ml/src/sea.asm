@@ -208,6 +208,7 @@ pp_r    lda     CurC
         lbhs    pp_in
         lbsr    UndrawCursorLeft
         inc     CurC
+        lbsr    ClampCur
         lbsr    DrawCursorLeft
         lbra    pp_in
 pp_l    lda     CurC
@@ -215,6 +216,7 @@ pp_l    lda     CurC
         lbls    pp_in
         lbsr    UndrawCursorLeft
         dec     CurC
+        lbsr    ClampCur
         lbsr    DrawCursorLeft
         lbra    pp_in
 pp_dn   lda     CurR
@@ -222,6 +224,7 @@ pp_dn   lda     CurR
         lbhs    pp_in
         lbsr    UndrawCursorLeft
         inc     CurR
+        lbsr    ClampCur
         lbsr    DrawCursorLeft
         lbra    pp_in
 pp_u    lda     CurR
@@ -229,8 +232,26 @@ pp_u    lda     CurR
         lbls    pp_in
         lbsr    UndrawCursorLeft
         dec     CurR
+        lbsr    ClampCur
         lbsr    DrawCursorLeft
         lbra    pp_in
+
+ClampCur
+        lda     CurR
+        bne     cc1
+        lda     #1
+cc1     cmpa    #10
+        bls     cc2
+        lda     #10
+cc2     sta     CurR
+        lda     CurC
+        bne     cc3
+        lda     #1
+cc3     cmpa    #10
+        bls     cc4
+        lda     #10
+cc4     sta     CurC
+        rts
 pp_put
         lda     CurR
         sta     TmpR
@@ -501,6 +522,7 @@ pt_r    lda     CurC
         lbhs    pt_i
         lbsr    UndrawCursorRight
         inc     CurC
+        lbsr    ClampCur
         lbsr    DrawCursorRight
         lbra    pt_i
 pt_l    lda     CurC
@@ -508,6 +530,7 @@ pt_l    lda     CurC
         lbls    pt_i
         lbsr    UndrawCursorRight
         dec     CurC
+        lbsr    ClampCur
         lbsr    DrawCursorRight
         lbra    pt_i
 pt_dn   lda     CurR
@@ -515,6 +538,7 @@ pt_dn   lda     CurR
         lbhs    pt_i
         lbsr    UndrawCursorRight
         inc     CurR
+        lbsr    ClampCur
         lbsr    DrawCursorRight
         lbra    pt_i
 pt_up   lda     CurR
@@ -522,6 +546,7 @@ pt_up   lda     CurR
         lbls    pt_i
         lbsr    UndrawCursorRight
         dec     CurR
+        lbsr    ClampCur
         lbsr    DrawCursorRight
         lbra    pt_i
 pt_fire
@@ -1122,22 +1147,14 @@ DrawCursorRight
         lda     #RY0
         sta     BY0
 DrawCur
-        * XOR invert cell under cursor (fast, no Plot2)
+        * Solid cursor block (no XOR state). Undraw restores via DrawOneCell.
         lda     CurR
         sta     RR
         lda     CurC
         sta     CC
         lbsr    CellOrigin
-        lbsr    CellAddrByte
-        ldb     #8
-dcur1   lda     ,x
-        eora    #$FF
-        sta     ,x
-        lda     #GBPL
-        leax    a,x
-        decb
-        bne     dcur1
-        rts
+        lda     #$FF
+        lbra    CellFillA
 
 ***********************************************************************
 * Low-level PMODE 4 graphics
@@ -1394,45 +1411,61 @@ Font8
         fcb     $FF,$03,$06,$0C,$18,$30,$60,$FF  * Z
 
 ***********************************************************************
-* Keyboard — POLCAT only, edge triggered, bounded release (no hard freeze)
+* Keyboard — POLCAT with saved registers (ROM destroys X/B/Y!)
+* Edge: release → press → release. Memory counters so timeout works.
 ***********************************************************************
 POLCAT  equ     $A000
 
+* Safe POLCAT: return key in A, preserve B,X,Y,U,DP
+Polcat
+        pshs    b,x,y,u
+        jsr     [POLCAT]
+        puls    b,x,y,u
+        rts
+
 WaitKey
-        * wait key up (bounded)
-        ldb     #$30
-        ldx     #0
-wku     jsr     [POLCAT]
+        andcc   #$EF            ; ensure IRQ enabled (keyboard scan)
+        * --- wait until no key (bounded) ---
+        ldd     #$6000
+        std     KTimer
+wku     lbsr    Polcat
         tsta
         beq     wkp
-        leax    -1,x
+        ldd     KTimer
+        subd    #1
+        std     KTimer
         bne     wku
-        decb
-        bne     wku
-        * press
-wkp     jsr     [POLCAT]
+        * timed out still "down" — fall through
+        * --- wait for key press ---
+wkp     lbsr    Polcat
         tsta
         beq     wkp
-        pshs    a
-        * release (bounded)
-        ldb     #$30
-        ldx     #0
-wkr     jsr     [POLCAT]
+        sta     KChar
+        * --- wait release (bounded) ---
+        ldd     #$6000
+        std     KTimer
+wkr     lbsr    Polcat
         tsta
-        beq     wko
-        leax    -1,x
+        beq     wkd
+        ldd     KTimer
+        subd    #1
+        std     KTimer
         bne     wkr
-        decb
-        bne     wkr
-wko     puls    a
+wkd     lda     KChar
         cmpa    #'a
-        blo     wkok
+        blo     wku2
         cmpa    #'z
-        bhi     wkok
+        bhi     wku2
         suba    #32
-wkok    ldx     #$80
-wks     leax    -1,x
-        bne     wks
+        sta     KChar
+wku2    * inter-key gap so one press ≠ many
+        ldd     #$1800
+        std     KTimer
+wkg     ldd     KTimer
+        subd    #1
+        std     KTimer
+        bne     wkg
+        lda     KChar
         rts
 
 
@@ -1567,6 +1600,8 @@ TmpB    zmb     1
 RR      zmb     1
 CC      zmb     1
 Rnd     zmb     1
+KTimer  zmb     2
+KChar   zmb     1
 BoardWhich zmb  1
 BX0     zmb     1
 BY0     zmb     1
