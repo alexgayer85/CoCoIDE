@@ -19,11 +19,11 @@ Click the **XRoar window** so it has keyboard focus.
 
 | Key | Action |
 |-----|--------|
-| **W / S** or **I / K** | Up / down |
-| **J / L** or **D** | Left / right (`A` = auto-place) |
-| **Space** or **Enter** | Fire / place ship |
-| **R** | Rotate (placement) |
-| **A** | Auto-place fleet |
+| **W A S D** | Move (standard WASD — **A is left**) |
+| **I/K J/L** | Alternate up/down left/right |
+| **Space** / **Enter** | Place ship or fire |
+| **R** | Rotate ship (placement) |
+| **P** or **0** | Auto-place fleet (not A!) |
 | **F** | Full redraw |
 
 Cursor moves only touch one cell. Labels use **pre-baked 8×8 glyphs** (8 byte stores per character, not per-pixel Plot2).

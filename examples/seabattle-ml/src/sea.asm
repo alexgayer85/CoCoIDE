@@ -148,43 +148,35 @@ pp_draw
         lbsr    DrawScores
         lbsr    DrawCursorLeft
 pp_in
-        lbsr    WaitKey         ; A=0 if none (ignore)
+        lbsr    WaitKey
         tsta
         lbeq    pp_in
-        cmpa    #'A
-        lbeq    pp_auto
-        cmpa    #'a
-        lbeq    pp_auto
-        cmpa    #'R
-        lbeq    pp_rot
-        cmpa    #'r
-        lbeq    pp_rot
-        cmpa    #9
-        lbeq    pp_r
+        * WASD movement (A = left, NOT auto)
         cmpa    #'D
         lbeq    pp_r
         cmpa    #'d
         lbeq    pp_r
-        cmpa    #'L
-        lbeq    pp_r
-        cmpa    #'l
-        lbeq    pp_r
-        cmpa    #8
+        cmpa    #'A
         lbeq    pp_l
-        cmpa    #'J
-        lbeq    pp_l
-        cmpa    #'j
+        cmpa    #'a
         lbeq    pp_l
         cmpa    #'S
         lbeq    pp_dn
         cmpa    #'s
         lbeq    pp_dn
-        cmpa    #10
-        lbeq    pp_dn
         cmpa    #'W
         lbeq    pp_u
         cmpa    #'w
         lbeq    pp_u
+        * extras
+        cmpa    #'L
+        lbeq    pp_r
+        cmpa    #'l
+        lbeq    pp_r
+        cmpa    #'J
+        lbeq    pp_l
+        cmpa    #'j
+        lbeq    pp_l
         cmpa    #'I
         lbeq    pp_u
         cmpa    #'i
@@ -193,6 +185,22 @@ pp_in
         lbeq    pp_dn
         cmpa    #'k
         lbeq    pp_dn
+        cmpa    #9
+        lbeq    pp_r
+        cmpa    #8
+        lbeq    pp_l
+        cmpa    #10
+        lbeq    pp_dn
+        cmpa    #'R
+        lbeq    pp_rot
+        cmpa    #'r
+        lbeq    pp_rot
+        cmpa    #'P
+        lbeq    pp_auto
+        cmpa    #'p
+        lbeq    pp_auto
+        cmpa    #'0
+        lbeq    pp_auto
         cmpa    #32
         lbeq    pp_put
         cmpa    #13
@@ -258,10 +266,7 @@ pp_put
         lda     CurC
         sta     TmpC
         clr     TmpG
-        ldb     ShipId
-        ldx     #SL-1
-        abx
-        ldb     ,x
+        lbsr    ShipLen         ; → B = SL(ShipId)
         stb     TmpL
         lbsr    CanPlace
         lda     CP
@@ -330,11 +335,12 @@ ap_t    inc     Tries
         lbsr    Rand
         anda    #1
         sta     Horiz
-        ldb     ShipId
-        ldx     #SL-1
-        abx
-        ldb     ,x
+        lbsr    ShipLen
         stb     TmpL
+        lda     TmpL
+        beq     ap_n            ; safety
+        cmpa    #10
+        bhi     ap_n
         lda     Horiz
         bne     ap_hh
         lda     #11
@@ -363,6 +369,24 @@ ap_c    lda     PlaceGrid
 ap_n    inc     ShipId
         bra     ap_s
 ap_x    rts
+
+* ShipId (1..5) → B = length from SL[]
+ShipLen
+        pshs    a,x
+        lda     ShipId
+        beq     sl0
+        cmpa    #5
+        bls     sl1
+        lda     #5
+sl1     deca                    ; 0..4
+        ldx     #SL
+        lda     a,x
+        tfr     a,b
+        puls    a,x
+        rts
+sl0     ldb     #2
+        puls    a,x
+        rts
 
 ***********************************************************************
 * CanPlace / PlaceShip / CellAddr
@@ -409,9 +433,7 @@ cpo     rts
 PlaceShip
         sta     TmpG
         stb     ShipId
-        ldx     #SL-1
-        abx
-        ldb     ,x
+        lbsr    ShipLen
         stb     TmpL
         clr     TmpI
 psl     lda     TmpI
@@ -488,6 +510,10 @@ pt_i    lbsr    WaitKey
         lbeq    pt_r
         cmpa    #9
         lbeq    pt_r
+        cmpa    #'A
+        lbeq    pt_l
+        cmpa    #'a
+        lbeq    pt_l
         cmpa    #'J
         lbeq    pt_l
         cmpa    #'j
@@ -1541,14 +1567,14 @@ rn1     lda     #1
 TTitle  fcn     "SEA BATTLE ML"
 TSub    fcn     "PMODE4 DUAL BOARD"
 TCtrl   fcn     "WASD MOVE  R ROTATE"
-TCtrl2  fcn     "SPACE FIRE/PLACE  A AUTO"
+TCtrl2  fcn     "SPACE PUT  P AUTO"
 TGo     fcn     "PRESS ANY KEY"
 TPlace  fcn     "PLACE FLEET"
 TShip   fcn     "SHIP"
 THV     fcn     ""
 TH      fcn     "HORIZ"
 TV      fcn     "VERT"
-THint   fcn     "R ROT  A AUTO  SPACE PUT"
+THint   fcn     "WASD MOVE  P AUTO  SPC PUT"
 TReady  fcn     "READY - KEY"
 TComp   fcn     "COMPUTER PLACES..."
 TYou    fcn     "YOUR FLEET"
