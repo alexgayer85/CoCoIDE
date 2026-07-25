@@ -301,12 +301,25 @@ pp_bad
         lbsr    Beep
         lbra    pp_in
 pp_auto
-        * Direct grid pokes only — no nested place routines (P must never hang)
+        * Immediate audio so we know P was recognized
+        lda     #2
+        lbsr    Beep
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
+        * Redraw left board only (player ships) — skip full dual for speed
+        lda     #0
+        sta     BoardWhich
+        lda     #LX0
+        sta     BX0
+        lda     #LY0
+        sta     BY0
+        lbsr    DrawOneBoard
         lda     #1
         lbsr    Beep
+        * Continue into battle setup without waiting for another key
+        rts
+
 pp_done
         lbsr    DrawBoardsOnly
         lda     #1
