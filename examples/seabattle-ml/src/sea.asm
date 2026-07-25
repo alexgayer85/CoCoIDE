@@ -185,12 +185,24 @@ pp_in
         lbeq    pp_dn
         cmpa    #'k
         lbeq    pp_dn
-        cmpa    #9
+        cmpa    #9              ; right arrow
         lbeq    pp_r
-        cmpa    #8
+        cmpa    #8              ; left arrow / BS
         lbeq    pp_l
-        cmpa    #10
+        cmpa    #10             ; down arrow
         lbeq    pp_dn
+        cmpa    #94             ; up arrow (common CoCo / XRoar)
+        lbeq    pp_u
+        cmpa    #12             ; up alt
+        lbeq    pp_u
+        cmpa    #11             ; up alt
+        lbeq    pp_u
+        cmpa    #30             ; up alt
+        lbeq    pp_u
+        cmpa    #28             ; up alt
+        lbeq    pp_u
+        cmpa    #'^
+        lbeq    pp_u
         cmpa    #'R
         lbeq    pp_rot
         cmpa    #'r
@@ -318,7 +330,9 @@ PlaceEnemyFleet
         rts
 
 ***********************************************************************
-* Auto place A=grid
+* Auto place A=grid — deterministic (no random hang).
+* Places ships horizontally on rows 1..5 starting at column 1.
+* Empty board always succeeds; occupied board scans rows/cols.
 ***********************************************************************
 AutoPlaceFleet
         sta     PlaceGrid
@@ -327,50 +341,58 @@ AutoPlaceFleet
 ap_s    lda     ShipId
         cmpa    #6
         lbhs    ap_x
-        clr     Tries
-ap_t    inc     Tries
-        lda     Tries
-        cmpa    #250
-        bhi     ap_n
-        lbsr    Rand
-        anda    #1
-        sta     Horiz
         lbsr    ShipLen
         stb     TmpL
-        lda     TmpL
-        beq     ap_n            ; safety
-        cmpa    #10
-        bhi     ap_n
-        lda     Horiz
-        bne     ap_hh
-        lda     #11
-        suba    TmpL
-        lbsr    RandN
-        sta     TmpR
-        lda     #10
-        lbsr    RandN
+        lda     #1
+        sta     Horiz           ; always horizontal first
+        lda     ShipId
+        sta     TmpR            ; prefer row = ship id
+        lda     #1
         sta     TmpC
-        bra     ap_c
-ap_hh   lda     #10
-        lbsr    RandN
+        lbsr    ap_try
+        bcs     ap_ok
+        * scan all cells for a fit
+        lda     #1
         sta     TmpR
-        lda     #11
-        suba    TmpL
-        lbsr    RandN
+ap_rr   lda     #1
         sta     TmpC
-ap_c    lda     PlaceGrid
-        sta     TmpG
-        lbsr    CanPlace
-        lda     CP
-        beq     ap_t
-        lda     PlaceGrid
+ap_cc   lda     #1
+        sta     Horiz
+        lbsr    ap_try
+        bcs     ap_ok
+        clr     Horiz
+        lbsr    ap_try
+        bcs     ap_ok
+        inc     TmpC
+        lda     TmpC
+        cmpa    #11
+        blo     ap_cc
+        inc     TmpR
+        lda     TmpR
+        cmpa    #11
+        blo     ap_rr
+        * give up this ship
+        bra     ap_next
+ap_ok   lda     PlaceGrid
         ldb     ShipId
         lbsr    PlaceShip
-ap_n    inc     ShipId
+ap_next inc     ShipId
         bra     ap_s
 ap_x    rts
 
-* ShipId (1..5) → B = length from SL[]
+* Try CanPlace at TmpR/TmpC/Horiz/TmpL/PlaceGrid → CS if ok
+ap_try
+        lda     PlaceGrid
+        sta     TmpG
+        lbsr    CanPlace
+        lda     CP
+        bne     ap_ty
+        andcc   #$FE            ; clear C = fail
+        rts
+ap_ty   orcc    #$01            ; set C = ok
+        rts
+
+* ShipId (1..5) → B = length. Uses fixed table (not fragile BSS index).
 ShipLen
         pshs    a,x
         lda     ShipId
@@ -379,7 +401,7 @@ ShipLen
         bls     sl1
         lda     #5
 sl1     deca                    ; 0..4
-        ldx     #SL
+        leax    LenTab,pcr
         lda     a,x
         tfr     a,b
         puls    a,x
@@ -387,6 +409,8 @@ sl1     deca                    ; 0..4
 sl0     ldb     #2
         puls    a,x
         rts
+
+LenTab  fcb     5,4,3,3,2
 
 ***********************************************************************
 * CanPlace / PlaceShip / CellAddr
@@ -538,6 +562,18 @@ pt_i    lbsr    WaitKey
         lbeq    pt_dn
         cmpa    #'k
         lbeq    pt_dn
+        cmpa    #94
+        lbeq    pt_up
+        cmpa    #12
+        lbeq    pt_up
+        cmpa    #11
+        lbeq    pt_up
+        cmpa    #30
+        lbeq    pt_up
+        cmpa    #28
+        lbeq    pt_up
+        cmpa    #'^
+        lbeq    pt_up
         cmpa    #32
         lbeq    pt_fire
         cmpa    #13
@@ -771,9 +807,11 @@ ase     ldx     #RD
         lbsr    CellAddr
         lda     #2
         sta     ,x
-        ldx     #SR-1
-        ldb     SID
-        abx
+        * dec SR[SID-1]
+        ldx     #SR
+        lda     SID
+        deca
+        leax    a,x
         dec     ,x
         dec     EH
         lda     #1
