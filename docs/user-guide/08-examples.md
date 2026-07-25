@@ -53,9 +53,9 @@ Multi-file modern BASIC (`@include`). See `examples/seabattle/README.md`.
 
 ## `examples/seabattle-ml`
 
-**Sea Battle ML** — same game as a **hybrid**: thin `MAIN.BAS` loader + **6809**
-`SEA.BIN`. Text-screen **dual boards** (fleet | radar). Target **CoCo 2 · 64K**
-(also fine on CoCo 1/3). See `examples/seabattle-ml/README.md`.
+**Sea Battle ML** — hybrid **PMODE 4** game: thin `MAIN.BAS` loader + **6809**
+`SEA.BIN`. Dual boards (fleet | radar), cursor controls (WASD/Space). Target
+**CoCo 2 · 64K** (CoCo 1/3 fine). See `examples/seabattle-ml/README.md`.
 
 ```bash
 ./run.sh examples/seabattle-ml

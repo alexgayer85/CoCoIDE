@@ -1,10 +1,9 @@
 # Sea Battle ML — CoCoIDE hybrid example
 
-**6809 machine-language** naval grid combat with a thin DECB BASIC loader.
-Text-screen **dual boards** (your fleet | radar), playable on **CoCo 1 / 2 / 3**.
+**6809** naval combat with **PMODE 4** dual boards (your fleet | radar).
+Works on **CoCo 1 / 2 / 3** (ECB graphics, not CoCo‑3 only).
 
-Companion to the modern-BASIC game in `examples/seabattle` (not affiliated with
-Hasbro / Milton Bradley).
+Companion to the text/BASIC game in `examples/seabattle`.
 
 ## Play
 
@@ -12,43 +11,49 @@ Hasbro / Milton Bradley).
 ./run.sh examples/seabattle-ml
 ```
 
-**Build Disk** → **Run in XRoar**. Default project: **CoCo 2 · 64K**.
+**Build Disk** → **Run in XRoar**. Default: **CoCo 2 · 64K**.
 
-Or change the green target chip to CoCo 3 if you prefer.
+Click the **XRoar window** so it has keyboard focus.
 
-### Controls
+### Controls (cursor — no typing coordinates)
 
-1. Click the **XRoar** window for keyboard focus.  
-2. After results you will see **PRESS ANY KEY** — press a key to continue  
-   (miss → computer turn → your next shot).  
-3. Placement: type **A** (auto) or **M** (manual), then **Enter**.  
-4. Manual: coordinate (`B3`), Enter, then **H** or **V**, Enter.  
-5. Shots: `C7` or `J0` (0 = column 10), then **Enter**.  
-6. **F** then Enter pauses (boards stay visible).  
+| Key | Action |
+|-----|--------|
+| **W A S D** | Move cursor |
+| **Space** or **Enter** | Fire (battle) / place ship |
+| **R** | Rotate ship (placement) |
+| **A** | Auto-place your remaining fleet |
+| **F** | Redraw boards (battle) |
 
-Glyphs: `.` water · `#` ship · `o` miss · `*` hit  
+After HIT / MISS / computer turn, press **any key** (or wait — there is a timeout so the game cannot freeze forever).
 
-## Layout (battle)
+### Glyphs (graphics)
+
+| Cell | Meaning |
+|------|---------|
+| Empty / dot | Water / unknown |
+| Solid block | Your ship (left) or hit |
+| Small block | Miss |
+
+## Layout
 
 ```text
- YOUR FLEET          RADAR
- 1234567890          1234567890
-A ..###.....        A ...o.*....
-...
-E:xx Y:yy
+  YOUR FLEET              RADAR
+  ┌──────────┐         ┌──────────┐
+  │  ships   │         │  shots   │
+  └──────────┘         └──────────┘
+  E:nn Y:nn
 ```
 
 ## Sources
 
 | File | Role |
 |------|------|
-| `src/main.bas` | `CLEAR200,&H3F00` · `LOADM"SEA"` · `EXEC` |
-| `src/sea.asm` | Full game engine → `SEA.BIN` |
+| `src/main.bas` | `CLEAR` / `PCLEAR4` / `PMODE4,1` / `SCREEN1,1` / `LOADM"SEA"` / `EXEC` |
+| `src/sea.asm` | Game + PMODE 4 draw + **matrix keyboard** (not POLCAT) |
 
-`preprocessor: false` · ML at `$3F00` · DECB disk.
+ML load address **`$3F00`**. Graphics page **`$0E00`** (standard after `PCLEAR 4`).
 
-## Notes
+## Why matrix keys?
 
-- Faster board redraws than the BASIC version (direct text RAM).  
-- AI: random fire + neighbor hunt after a hit.  
-- Design: `docs/superpowers/specs/2026-07-25-seabattle-ml-design.md`  
+`JSR [$A000]` (POLCAT) is often unreliable under XRoar after `EXEC`. This build reads the keyboard **PIA matrix** directly and times out so “press any key” cannot hang the game.
