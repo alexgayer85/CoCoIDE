@@ -1,6 +1,6 @@
 # 08 — Examples
 
-**Docs last updated:** 2026-07-12
+**Docs last updated:** 2026-07-25
 
 Sample projects ship under `examples/`.
 
@@ -50,6 +50,16 @@ pegboard game; not a Hasbro product).
 
 Auto or manual fleet placement, coordinate shots (`C7`), simple computer AI.
 Multi-file modern BASIC (`@include`). See `examples/seabattle/README.md`.
+
+## `examples/seabattle-ml`
+
+**Sea Battle ML** — same game as a **hybrid**: thin `MAIN.BAS` loader + **6809**
+`SEA.BIN`. Text-screen **dual boards** (fleet | radar). Target **CoCo 2 · 64K**
+(also fine on CoCo 1/3). See `examples/seabattle-ml/README.md`.
+
+```bash
+./run.sh examples/seabattle-ml
+```
 
 ## Making your own from an example
 
