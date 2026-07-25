@@ -19,16 +19,16 @@ Click the **XRoar window** so it has keyboard focus.
 
 | Key | Action |
 |-----|--------|
-| **W S** | Move cursor up / down |
-| **J L** or **D** | Move left / right (`A` = auto-place, not left) |
-| **Space** or **Enter** | Fire (battle) / place ship |
-| **R** | Rotate ship (placement) |
-| **A** | Auto-place your remaining fleet |
-| **F** | Full redraw (battle) |
+| **W / S** or **I / K** | Up / down |
+| **J / L** or **D** | Left / right (`A` = auto-place) |
+| **Space** or **Enter** | Fire / place ship |
+| **R** | Rotate (placement) |
+| **A** | Auto-place fleet |
+| **F** | Full redraw |
 
-Cursor moves **without** redrawing the whole screen (only the cursor cell).
+Cursor moves only touch one cell. Labels use **pre-baked 8×8 glyphs** (8 byte stores per character, not per-pixel Plot2).
 
-After HIT / MISS / computer turn, press **any key** (or wait — there is a timeout so the game cannot freeze forever).
+After a result message, press a key to continue.
 
 ### Glyphs (graphics)
 
