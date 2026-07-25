@@ -19,10 +19,11 @@ Or change the green target chip to CoCo 3 if you prefer.
 ### Controls
 
 1. Click the **XRoar** window for keyboard focus.  
-2. **Enter** to continue prompts.  
-3. Placement: type **A** (auto) or **M** (manual), then Enter.  
+2. After results you will see **PRESS ANY KEY** — press a key to continue  
+   (miss → computer turn → your next shot).  
+3. Placement: type **A** (auto) or **M** (manual), then **Enter**.  
 4. Manual: coordinate (`B3`), Enter, then **H** or **V**, Enter.  
-5. Shots: `C7` or `J0` (0 = column 10), Enter.  
+5. Shots: `C7` or `J0` (0 = column 10), then **Enter**.  
 6. **F** then Enter pauses (boards stay visible).  
 
 Glyphs: `.` water · `#` ship · `o` miss · `*` hit  

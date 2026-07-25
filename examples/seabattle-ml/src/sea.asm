@@ -25,6 +25,8 @@ PIA2CRB equ     $FF23
 * Entry
 ***********************************************************************
 START
+        clra
+        tfr     a,dp            ; DP=$00 for ROM calls
         lbsr    SeedRnd
         lbsr    SoundInit
         lbsr    TitleScreen
@@ -127,9 +129,9 @@ PlacePlayerFleet
         lbsr    ReadLine
         lda     LineBuf
         cmpa    #'M
-        beq     pp_man
+        lbeq    pp_man
         cmpa    #'m
-        beq     pp_man
+        lbeq    pp_man
         ; default / A → auto
 pp_auto
         lbsr    Cls
@@ -165,7 +167,7 @@ pp_mtry
         lbsr    ReadLine
         lbsr    ParseCoord
         lda     GR
-        beq     pp_mbad
+        lbeq    pp_mbad
         leax    MHV,pcr
         ldy     #SCRN+15*COLS+0
         lbsr    PutStr
@@ -192,7 +194,7 @@ pp_mv
         stb     TmpL
         lbsr    CanPlace
         lda     CP
-        beq     pp_mnoroom
+        lbeq    pp_mnoroom
         lda     TmpG
         ldb     ShipId
         lbsr    PlaceShip
@@ -425,65 +427,73 @@ pf_again
         lbeq    pf_fleet
         lbsr    ParseCoord
         lda     GR
-        beq     pf_bad
-        lda     #1              ; enemy grid for ApplyShot
-        ldb     GR
-        stb     TmpR
-        ldb     GC
-        stb     TmpC
+        lbeq    pf_bad
+        lda     GR
+        sta     TmpR
+        lda     GC
+        sta     TmpC
+        lda     #1              ; fire at enemy fleet
         lbsr    ApplyShot
         lbsr    DrawDual
         lda     HT
         cmpa    #2
-        beq     pf_alr
+        lbeq    pf_alr
         cmpa    #0
-        beq     pf_miss
+        lbeq    pf_miss
         cmpa    #3
-        beq     pf_sunk
+        lbeq    pf_sunk
         ; hit
         leax    MHit,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+13*COLS+0
+        lbsr    PutStr
+        leax    MCont,pcr
+        ldy     #SCRN+14*COLS+0
         lbsr    PutStr
         lda     #1
         lbsr    Beep
-        lbsr    PauseShort
+        lbsr    WaitAnyKey
         rts
 pf_miss
         leax    MMiss,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+13*COLS+0
+        lbsr    PutStr
+        leax    MCont,pcr
+        ldy     #SCRN+14*COLS+0
         lbsr    PutStr
         lda     #0
         lbsr    Beep
-        lbsr    PauseShort
+        lbsr    WaitAnyKey
         rts
 pf_sunk
         leax    MSunk,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+13*COLS+0
         lbsr    PutStr
         lda     SID
         lbsr    PutShipNameAtY
+        leax    MCont,pcr
+        ldy     #SCRN+14*COLS+0
+        lbsr    PutStr
         lda     #2
         lbsr    Beep
-        lbsr    PauseShort
+        lbsr    WaitAnyKey
         rts
 pf_alr
         leax    MAlready,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+13*COLS+0
         lbsr    PutStr
-        lbsr    PauseShort
+        lbsr    WaitAnyKey
         lbra    pf_again
 pf_bad
         leax    MBad,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+13*COLS+0
         lbsr    PutStr
-        lbsr    PauseShort
+        lbsr    WaitAnyKey
         lbra    pf_again
 pf_fleet
-        ; dual already shows fleet; just pause
-        leax    MReady,pcr
-        ldy     #SCRN+15*COLS+0
+        leax    MCont,pcr
+        ldy     #SCRN+13*COLS+0
         lbsr    PutStr
-        lbsr    WaitEnter
+        lbsr    WaitAnyKey
         lbra    pf_again
 
 ***********************************************************************
@@ -495,7 +505,7 @@ ApplyShot
         clr     HT
         clr     SID
         lda     TmpG
-        bne     as_en
+        lbne    as_en
         ; --- shot on player (computer fires) ---
         ldx     #PS
         lda     TmpR
@@ -507,7 +517,7 @@ ApplyShot
         cmpa    #7
         lbeq    as_alr
         tsta
-        beq     as_pmiss
+        lbeq    as_pmiss
         cmpa    #5
         lbhi    as_done
         sta     SID
@@ -547,14 +557,14 @@ as_en
         ldb     TmpC
         lbsr    CellAddr
         lda     ,x
-        bne     as_alr
+        lbne    as_alr
         ldx     #ES
         lda     TmpR
         ldb     TmpC
         lbsr    CellAddr
         lda     ,x
         tsta
-        beq     as_emiss
+        lbeq    as_emiss
         cmpa    #5
         lbhi    as_done
         sta     SID
@@ -622,39 +632,51 @@ ComputerFires
         leax    MComp,pcr
         ldy     #SCRN+13*COLS+0
         lbsr    PutStr
-        lbsr    PauseShort
         lbsr    AiPickShot
-        lda     #0
-        ldb     AR
-        stb     TmpR
-        ldb     AC
-        stb     TmpC
+        ; clamp AR/AC to 1..10
+        lda     AR
+        beq     cf_fix
+        cmpa    #10
+        bls     cf_arok
+cf_fix lda     #1
+        sta     AR
+cf_arok lda     AC
+        beq     cf_fc
+        cmpa    #10
+        bls     cf_acok
+cf_fc   lda     #1
+        sta     AC
+cf_acok
+        lda     AR
+        sta     TmpR
+        lda     AC
+        sta     TmpC
+        clra                    ; fire at player fleet
         lbsr    ApplyShot
         lbsr    DrawDual
         leax    MAt,pcr
-        ldy     #SCRN+14*COLS+0
+        ldy     #SCRN+13*COLS+0
         lbsr    PutStr
-        ; print coord
         lda     AR
-        adda    #64             ; 'A'-1 + r → 'A' if r=1? 64+1=65 'A' yes if AR is 1-based
+        adda    #64
         lbsr    PutCharY
         lda     AC
         cmpa    #10
-        beq     cf_10
+        lbeq    cf_10
         adda    #'0
         lbsr    PutCharY
-        bra     cf_msg
+        lbra    cf_msg
 cf_10   lda     #'1
         lbsr    PutCharY
         lda     #'0
         lbsr    PutCharY
 cf_msg
         lda     HT
-        beq     cf_miss
+        lbeq    cf_miss
         cmpa    #3
-        beq     cf_sunk
+        lbeq    cf_sunk
         leax    MCompHit,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+14*COLS+0
         lbsr    PutStr
         lda     #1
         sta     Hunt
@@ -664,23 +686,26 @@ cf_msg
         sta     HC
         lda     #1
         lbsr    Beep
-        bra     cf_end
+        lbra    cf_end
 cf_miss
         leax    MCompMiss,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+14*COLS+0
         lbsr    PutStr
         lda     #0
         lbsr    Beep
-        bra     cf_end
+        lbra    cf_end
 cf_sunk
         leax    MCompSink,pcr
-        ldy     #SCRN+15*COLS+0
+        ldy     #SCRN+14*COLS+0
         lbsr    PutStr
         clr     Hunt
         lda     #2
         lbsr    Beep
 cf_end
-        lbsr    PauseShort
+        leax    MCont,pcr
+        ldy     #SCRN+15*COLS+0
+        lbsr    PutStr
+        lbsr    WaitAnyKey
         rts
 
 ***********************************************************************
@@ -694,7 +719,7 @@ AiPickShot
 ai_nb
         lda     TmpI
         cmpa    #5
-        bhs     ai_rnd0
+        lbhs    ai_rnd0
         lda     HR
         ldb     HC
         cmpa    #1
@@ -756,7 +781,7 @@ ai_lp
         inc     Tries
         lda     Tries
         cmpa    #200
-        bhi     ai_scan
+        lbhi    ai_scan
         lda     #10
         lbsr    RandN
         sta     AR
@@ -780,7 +805,7 @@ ais_c   ldx     #AK
         ldb     AC
         lbsr    CellAddr
         lda     ,x
-        beq     ais_ok
+        lbeq    ais_ok
         inc     AC
         lda     AC
         cmpa    #11
@@ -805,13 +830,13 @@ GameOver
         ldy     #SCRN+13*COLS+8
         lbsr    PutStr
         lda     EH
-        bne     go_lose
+        lbne    go_lose
         leax    MWin,pcr
         ldy     #SCRN+14*COLS+10
         lbsr    PutStr
         lda     #2
         lbsr    Beep
-        bra     go_wait
+        lbra    go_wait
 go_lose
         leax    MLose,pcr
         ldy     #SCRN+14*COLS+10
@@ -1038,40 +1063,55 @@ psn5    leax    N5,pcr
 psn_go  lbra    PutStr
 
 ***********************************************************************
-* Keyboard
+* Keyboard (POLCAT via [$A000]; bounded drain so we never spin forever)
 ***********************************************************************
+* Wait for any key (after results / prompts). Accept any non-zero.
+WaitAnyKey
 WaitEnter
-we_d    jsr     [POLCAT]
-        cmpa    #0
-        bne     we_d            ; drain
-we_w    jsr     [POLCAT]
-        cmpa    #0
-        beq     we_w
-        cmpa    #13
-        beq     we_ok
-        cmpa    #3              ; break?
-        beq     we_ok
-        bra     we_w
-we_ok   rts
+        lbsr    KeyDrain
+wak_w   lbsr    KeyPoll
+        tsta
+        beq     wak_w
+        rts
+
+* Poll once → A=key or 0
+KeyPoll
+        jsr     [POLCAT]
+        rts
+
+* Clear keyboard buffer (max 64 reads)
+KeyDrain
+        ldb     #64
+kd_l    jsr     [POLCAT]
+        tsta
+        beq     kd_done
+        decb
+        bne     kd_l
+kd_done rts
 
 ReadLine
         ldx     #LineBuf
-        ldb     #0
-        stb     LineLen
-        ; clear buffer
+        clr     LineLen
         pshs    x
         lda     #12
 rl_c    clr     ,x+
         deca
         bne     rl_c
         puls    x
-rl_d    jsr     [POLCAT]
-        tsta
-        bne     rl_d
-rl_l    jsr     [POLCAT]
+        ; clear echo row
+        ldy     #SCRN+15*COLS
+        lda     #$60
+        ldb     #32
+rl_cl   sta     ,y+
+        decb
+        bne     rl_cl
+        lbsr    KeyDrain
+rl_l    lbsr    KeyPoll
         tsta
         beq     rl_l
-        cmpa    #13
+        cmpa    #13             ; Enter
+        beq     rl_done
+        cmpa    #3              ; BREAK → treat as enter empty
         beq     rl_done
         cmpa    #8
         beq     rl_bs
@@ -1086,7 +1126,6 @@ rl_l    jsr     [POLCAT]
         bhs     rl_l
         sta     ,x+
         inc     LineLen
-        ; echo on bottom row
         pshs    a,x
         ldy     #SCRN+15*COLS
         ldb     LineLen
@@ -1110,6 +1149,7 @@ rl_bs   ldb     LineLen
         bra     rl_l
 rl_done
         clr     ,x
+        lbsr    KeyDrain
         rts
 
 ParseCoord
@@ -1207,13 +1247,13 @@ rn0     lda     #1
         rts
 
 PauseShort
-        ldx     #$4000
+        ldx     #$1800
 ps_l2   leax    -1,x
         bne     ps_l2
         rts
 
 ***********************************************************************
-* Sound
+* Sound (short tones — keep tight so game never feels frozen)
 ***********************************************************************
 SoundInit
         lda     PIA1CRA
@@ -1231,17 +1271,16 @@ Beep
         beq     bp_lo
         cmpa    #1
         beq     bp_md
-        ldb     #40
-        ldx     #20
+        ldb     #8
+        ldx     #12
         bra     bp_go
-bp_lo   ldb     #12
-        ldx     #50
+bp_lo   ldb     #4
+        ldx     #18
         bra     bp_go
-bp_md   ldb     #25
-        ldx     #30
+bp_md   ldb     #6
+        ldx     #14
 bp_go
-        ; B = outer, X = delay
-bp_o    lda     #$80
+bp_o    lda     #$40
 bp_i    sta     DAC
         eora    #$3F
         sta     DAC
@@ -1264,7 +1303,8 @@ MSub    fcn     "NAVAL GRID COMBAT"
 MFleet  fcn     "FLEET: 5 4 3 3 2"
 MVs     fcn     "YOU VS COMPUTER"
 MDual   fcn     "DUAL BOARD - TEXT MODE"
-MStart  fcn     "PRESS ENTER"
+MStart  fcn     "PRESS ANY KEY"
+MCont   fcn     "PRESS ANY KEY"
 MPlace  fcn     "PLACE YOUR FLEET"
 MAM     fcn     "A=AUTO  M=MANUAL"
 MChoice fcn     "CHOICE:"
@@ -1304,40 +1344,41 @@ N5      fcn     "DESTROYER"
 ***********************************************************************
 * Variables / grids (BSS after code)
 ***********************************************************************
-PS      rmb     100
-ES      rmb     100
-RD      rmb     100
-AK      rmb     100
-SL      rmb     5
-SR      rmb     5
-PH      rmb     1
-EH      rmb     1
-Hunt    rmb     1
-HR      rmb     1
-HC      rmb     1
-AR      rmb     1
-AC      rmb     1
-GR      rmb     1
-GC      rmb     1
-HT      rmb     1
-SID     rmb     1
-CP      rmb     1
-Horiz   rmb     1
-ShipId  rmb     1
-PlaceGrid rmb   1
-Tries   rmb     1
-TmpG    rmb     1
-TmpR    rmb     1
-TmpC    rmb     1
-TmpL    rmb     1
-TmpI    rmb     1
-TmpN    rmb     1
-TmpH    rmb     1
-TmpCnt  rmb     1
-RR      rmb     1
-CC      rmb     1
-Rnd     rmb     1
-LineLen rmb     1
-LineBuf rmb     12
+* zmb = zeros in the LOADM image (rmb would sit past the file end)
+PS      zmb     100
+ES      zmb     100
+RD      zmb     100
+AK      zmb     100
+SL      zmb     5
+SR      zmb     5
+PH      zmb     1
+EH      zmb     1
+Hunt    zmb     1
+HR      zmb     1
+HC      zmb     1
+AR      zmb     1
+AC      zmb     1
+GR      zmb     1
+GC      zmb     1
+HT      zmb     1
+SID     zmb     1
+CP      zmb     1
+Horiz   zmb     1
+ShipId  zmb     1
+PlaceGrid zmb   1
+Tries   zmb     1
+TmpG    zmb     1
+TmpR    zmb     1
+TmpC    zmb     1
+TmpL    zmb     1
+TmpI    zmb     1
+TmpN    zmb     1
+TmpH    zmb     1
+TmpCnt  zmb     1
+RR      zmb     1
+CC      zmb     1
+Rnd     zmb     1
+LineLen zmb     1
+LineBuf zmb     12
 
         end     START
