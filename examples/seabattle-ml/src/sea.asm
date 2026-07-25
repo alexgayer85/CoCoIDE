@@ -1040,19 +1040,21 @@ gc1     sta     ,x+
         rts
 
 * Plot2: set pixel A=X (0-255), B=Y (0-191)
+* Preserves X (DrawChar walks font data in X across Plot2 calls).
 Plot2
         cmpb    #192
         bhs     p2x
+        pshs    a,b,x
         sta     PixX
         stb     PixY
         lda     PixY
         ldb     #GBPL
-        mul
+        mul                     ; D = Y*32
         tfr     d,x
         lda     PixX
         lsra
         lsra
-        lsra
+        lsra                    ; X/8
         leax    a,x
         leax    GFX,x
         lda     PixX
@@ -1067,6 +1069,7 @@ p2sh    tst     TmpI
 p2or    tfr     a,b
         orb     ,x
         stb     ,x
+        puls    a,b,x
 p2x     rts
 
 FillRect2
