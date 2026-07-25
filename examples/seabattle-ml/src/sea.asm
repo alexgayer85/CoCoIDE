@@ -109,11 +109,11 @@ c1      clr     ,x+
 TitleScreen
         lbsr    GfxCls
         leax    TTitle,pcr
-        lda     #40
+        lda     #40             ; X multiple of 8 for fast blit
         ldb     #40
         lbsr    DrawStr
         leax    TSub,pcr
-        lda     #28
+        lda     #32
         ldb     #60
         lbsr    DrawStr
         leax    TCtrl,pcr
@@ -126,7 +126,7 @@ TitleScreen
         lbsr    DrawStr
         leax    TGo,pcr
         lda     #40
-        ldb     #150
+        ldb     #152
         lbsr    DrawStr
         lbsr    WaitKey
         rts
@@ -185,6 +185,14 @@ pp_in
         lbeq    pp_u
         cmpa    #'w
         lbeq    pp_u
+        cmpa    #'I
+        lbeq    pp_u
+        cmpa    #'i
+        lbeq    pp_u
+        cmpa    #'K
+        lbeq    pp_dn
+        cmpa    #'k
+        lbeq    pp_dn
         cmpa    #32
         lbeq    pp_put
         cmpa    #13
@@ -475,6 +483,14 @@ pt_i    lbsr    WaitKey
         lbeq    pt_up
         cmpa    #'w
         lbeq    pt_up
+        cmpa    #'I
+        lbeq    pt_up
+        cmpa    #'i
+        lbeq    pt_up
+        cmpa    #'K
+        lbeq    pt_dn
+        cmpa    #'k
+        lbeq    pt_dn
         cmpa    #32
         lbeq    pt_fire
         cmpa    #13
@@ -1229,7 +1245,7 @@ drsd    lda     RX
 drx     rts
 
 ***********************************************************************
-* Text
+* Text — 8x8 glyphs pre-defined; each char = 8 byte stores (not Plot2)
 ***********************************************************************
 DrawStr
         sta     TX
@@ -1244,7 +1260,7 @@ ds1     lda     ,x+
         lbsr    DrawChar
         puls    x
         lda     TX
-        adda    #6
+        adda    #8
         sta     TX
         bra     ds1
 dsx     rts
@@ -1264,7 +1280,7 @@ dn2     pshs    a
         ldb     TY
         lbsr    DrawChar
         lda     TX
-        adda    #6
+        adda    #8
         sta     TX
         puls    a
         adda    #'0
@@ -1273,196 +1289,152 @@ dn2     pshs    a
         ldb     TY
         lbsr    DrawChar
         lda     TX
-        adda    #6
+        adda    #8
         sta     TX
         rts
 
-* 5x7 font, column-major, bit0=TOP of column (bit1 = next row down, …).
-* Index = ASCII-32, glyphs 32..90 only.
+* A=x (use multiple of 8), B=y, TmpCh=ASCII
 DrawChar
         sta     CX
         stb     CY
         lda     TmpCh
         cmpa    #'a
-        blo     dcup
+        blo     dcu
         cmpa    #'z
-        bhi     dcup
-        suba    #32             ; a-z → A-Z
-dcup    cmpa    #32
-        blo     dcz
-        cmpa    #91             ; reject >= '['
-        bhs     dcz
-        suba    #32             ; 0..58
-        ldb     #5
-        mul                     ; D = glyph offset
-        ldx     #Font
-        leax    d,x             ; X → 5 column bytes
-        lda     #5
-        sta     TmpL
-dc_col  lda     ,x+
-        sta     TmpB
-        lda     #7              ; rows: bit0 .. bit6
-        sta     TmpI
+        bhi     dcu
+        suba    #32
+dcu     cmpa    #32
+        blo     dcx
+        cmpa    #91
+        bhs     dcx
+        suba    #32
+        ldb     #8
+        mul
+        ldx     #Font8
+        leax    d,x
         lda     CY
-        sta     PY
-dc_row  lda     TmpB
-        bita    #$01            ; LSB = top of glyph
-        beq     dc_s
+        ldb     #GBPL
+        mul
+        tfr     d,y
         lda     CX
-        ldb     PY
-        lbsr    Plot2
-dc_s    lsr     TmpB            ; next row down
-        inc     PY
-        dec     TmpI
-        bne     dc_row
-        inc     CX
-        dec     TmpL
-        bne     dc_col
-dcz     rts
+        lsra
+        lsra
+        lsra
+        leay    a,y
+        leay    GFX,y
+        ldb     #8
+dc_blit lda     ,x+
+        sta     ,y
+        lda     #GBPL
+        leay    a,y
+        decb
+        bne     dc_blit
+dcx     rts
+
+* 8x8 font ASCII 32-90, row-major, bit7=left. 8 bytes/glyph — blit as 8 STA.
+Font8
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * space
+        fcb     $18,$18,$18,$18,$18,$00,$18,$18  * !
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * "
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * #
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * $
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * %
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * &
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * '
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * (
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * )
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * *
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * +
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * ,
+        fcb     $00,$00,$00,$7E,$00,$00,$00,$00  * -
+        fcb     $00,$00,$00,$00,$00,$00,$18,$18  * .
+        fcb     $03,$06,$0C,$18,$30,$60,$C0,$00  * /
+        fcb     $7E,$C3,$C7,$CF,$DE,$E6,$C3,$7E  * 0
+        fcb     $18,$38,$78,$18,$18,$18,$18,$7E  * 1
+        fcb     $7E,$C3,$03,$06,$0C,$18,$30,$FF  * 2
+        fcb     $7E,$C3,$03,$1E,$03,$03,$C3,$7E  * 3
+        fcb     $0C,$1C,$3C,$6C,$CC,$FF,$0C,$0C  * 4
+        fcb     $FF,$C0,$C0,$7E,$03,$03,$C3,$7E  * 5
+        fcb     $3C,$60,$C0,$7E,$C3,$C3,$C3,$7E  * 6
+        fcb     $FF,$03,$06,$0C,$18,$30,$30,$30  * 7
+        fcb     $7E,$C3,$C3,$7E,$C3,$C3,$C3,$7E  * 8
+        fcb     $7E,$C3,$C3,$7F,$03,$03,$06,$7C  * 9
+        fcb     $00,$18,$18,$00,$00,$18,$18,$00  * :
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * ;
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * <
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * =
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * >
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * ?
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * @
+        fcb     $3C,$66,$C3,$C3,$FF,$C3,$C3,$C3  * A
+        fcb     $FE,$C3,$C3,$FE,$C3,$C3,$C3,$FE  * B
+        fcb     $7E,$C3,$C0,$C0,$C0,$C0,$C3,$7E  * C
+        fcb     $FC,$C6,$C3,$C3,$C3,$C3,$C6,$FC  * D
+        fcb     $FF,$C0,$C0,$FC,$C0,$C0,$C0,$FF  * E
+        fcb     $FF,$C0,$C0,$FC,$C0,$C0,$C0,$C0  * F
+        fcb     $7E,$C3,$C0,$C0,$CF,$C3,$C3,$7E  * G
+        fcb     $C3,$C3,$C3,$FF,$C3,$C3,$C3,$C3  * H
+        fcb     $7E,$18,$18,$18,$18,$18,$18,$7E  * I
+        fcb     $03,$03,$03,$03,$03,$C3,$C3,$7E  * J
+        fcb     $C3,$C6,$CC,$F0,$CC,$C6,$C3,$C3  * K
+        fcb     $C0,$C0,$C0,$C0,$C0,$C0,$C0,$FF  * L
+        fcb     $C3,$E7,$FF,$DB,$C3,$C3,$C3,$C3  * M
+        fcb     $C3,$E3,$F3,$DB,$CF,$C7,$C3,$C3  * N
+        fcb     $7E,$C3,$C3,$C3,$C3,$C3,$C3,$7E  * O
+        fcb     $FE,$C3,$C3,$FE,$C0,$C0,$C0,$C0  * P
+        fcb     $7E,$C3,$C3,$C3,$DB,$CF,$C6,$7D  * Q
+        fcb     $FE,$C3,$C3,$FE,$CC,$C6,$C3,$C3  * R
+        fcb     $7E,$C3,$C0,$7E,$03,$03,$C3,$7E  * S
+        fcb     $FF,$18,$18,$18,$18,$18,$18,$18  * T
+        fcb     $C3,$C3,$C3,$C3,$C3,$C3,$C3,$7E  * U
+        fcb     $C3,$C3,$C3,$C3,$C3,$66,$3C,$18  * V
+        fcb     $C3,$C3,$C3,$C3,$DB,$FF,$E7,$C3  * W
+        fcb     $C3,$C3,$66,$3C,$3C,$66,$C3,$C3  * X
+        fcb     $C3,$C3,$66,$3C,$18,$18,$18,$18  * Y
+        fcb     $FF,$03,$06,$0C,$18,$30,$60,$FF  * Z
 
 ***********************************************************************
-* Matrix keyboard — edge triggered (release → press → release).
-* Never invents Space on timeout (that was firing bogus game actions).
-* Returns A=ASCII, or A=0 if idle timeout (caller should ignore).
-*
-* Also tries ROM POLCAT as a second source (works on some XRoar setups).
+* Keyboard — POLCAT only, edge triggered, bounded release (no hard freeze)
 ***********************************************************************
 POLCAT  equ     $A000
 
 WaitKey
-        * Loop until a real key is received (never fake Space).
-        * 1) wait for release  2) wait for press  3) decode  4) wait release
-wk_start
-        lbsr    KeyWaitUp
-wk_wait_dn
-        lbsr    KeyAny
-        tsta
-        bne     wk_got
-        jsr     [POLCAT]
-        tsta
-        beq     wk_wait_dn
-        * ROM path
-        pshs    a
-        lbsr    KeyWaitUp
-        puls    a
-        cmpa    #'a
-        blo     wk_rok
-        cmpa    #'z
-        bhi     wk_rok
-        suba    #32
-wk_rok  tsta
-        beq     wk_start
-        rts
-wk_got
-        ldx     #$C0            ; debounce
-wk_db   leax    -1,x
-        bne     wk_db
-        lbsr    KeyDecode
-        pshs    a
-        lbsr    KeyWaitUp
-        puls    a
-        tsta
-        beq     wk_start
-        rts
-
-* Wait until no keys (bounded)
-KeyWaitUp
-        ldb     #$28
+        * wait key up (bounded)
+        ldb     #$30
         ldx     #0
-kwu1    lbsr    KeyAny
+wku     jsr     [POLCAT]
         tsta
-        beq     kwu2
+        beq     wkp
         leax    -1,x
-        bne     kwu1
+        bne     wku
         decb
-        bne     kwu1
-kwu2    lda     #$FF
-        sta     PIA0D           ; idle columns high
-        rts
-
-* A=0 none, A!=0 some key down. Restores columns to $FF.
-KeyAny
-        pshs    b,x
-        clr     ColN
-ka1     leax    ColTab,pcr
-        lda     ColN
-        lda     a,x
-        sta     PIA0D
-        lda     PIA0
-        anda    #$7F
-        cmpa    #$7F
-        bne     ka_yes
-        inc     ColN
-        lda     ColN
-        cmpa    #7              ; 7 columns used on CoCo
-        blo     ka1
-        clra
-        bra     ka_out
-ka_yes  lda     #1
-ka_out  pshs    a
-        lda     #$FF
-        sta     PIA0D
-        puls    a
-        puls    b,x
-        rts
-
-* Decode first pressed key → ASCII (0 if none/unknown)
-KeyDecode
-        clr     ColN
-kdc1    leax    ColTab,pcr
-        lda     ColN
-        lda     a,x
-        sta     PIA0D
-        lda     PIA0
-        anda    #$7F
-        cmpa    #$7F
-        bne     kdc_hit
-        inc     ColN
-        lda     ColN
-        cmpa    #7
-        blo     kdc1
-        clra
-        bra     kdc_done
-kdc_hit sta     RowBits
-        * invert: pressed bits become 1 for finding
-        eora    #$7F
-        sta     RowBits
-        clr     RowN
-kdc_r   lsr     RowBits
-        bcs     kdc_row         ; found a 1 = pressed
-        inc     RowN
-        lda     RowN
-        cmpa    #7
-        blo     kdc_r
-        clra
-        bra     kdc_done
-kdc_row lda     ColN
-        ldb     #7
-        mul
-        addb    RowN
-        clra
-        tfr     d,x
-        leax    KeyMap,x
-        lda     ,x
-kdc_done
+        bne     wku
+        * press
+wkp     jsr     [POLCAT]
+        tsta
+        beq     wkp
         pshs    a
-        lda     #$FF
-        sta     PIA0D
-        puls    a
+        * release (bounded)
+        ldb     #$30
+        ldx     #0
+wkr     jsr     [POLCAT]
+        tsta
+        beq     wko
+        leax    -1,x
+        bne     wkr
+        decb
+        bne     wkr
+wko     puls    a
+        cmpa    #'a
+        blo     wkok
+        cmpa    #'z
+        bhi     wkok
+        suba    #32
+wkok    ldx     #$80
+wks     leax    -1,x
+        bne     wks
         rts
 
-* CoCo keyboard columns (PB0..PB6). Active-low select.
-ColTab  fcb     $FE,$FD,$FB,$F7,$EF,$DF,$BF
-*
-* KeyMap[col*7+row] — standard CoCo layout (approx; enough for game keys)
-* col0 @ A B C D E F
-KeyMap  fcb     '@,'A,'B,'C,'D,'E,'F
-        fcb     'G,'H,'I,'J,'K,'L,'M
-        fcb     'N,'O,'P,'Q,'R,'S,'T
-        fcb     'U,'V,'W,'X,'Y,'Z,13
-        fcb     '0,'1,'2,'3,'4,'5,'6
-        fcb     '7,'8,'9,':,';,32,32
-        fcb     13,12,8,9,10,0,0
 
 * Sound / RNG
 ***********************************************************************
@@ -1531,76 +1503,6 @@ rno     inca
 rn1     lda     #1
         rts
 
-***********************************************************************
-* 5x7 font ASCII 32..90 (59 glyphs x 5 cols). Column-major; bit0 = TOP.
-* Counts: 16 punct (32-47) + 10 digits + 7 (:..@) + 26 letters = 59
-***********************************************************************
-Font
-        * 32 space .. 47 /
-        fcb     0,0,0,0,0
-        fcb     0,0,$5F,0,0
-        fcb     0,7,0,7,0
-        fcb     $14,$7F,$14,$7F,$14
-        fcb     $24,$2A,$7F,$2A,$12
-        fcb     $23,$13,$08,$64,$62
-        fcb     $36,$49,$55,$22,$50
-        fcb     0,5,3,0,0
-        fcb     0,$1C,$22,$41,0
-        fcb     0,$41,$22,$1C,0
-        fcb     $14,$08,$3E,$08,$14
-        fcb     $08,$08,$3E,$08,$08
-        fcb     0,$50,$30,0,0
-        fcb     $08,$08,$08,$08,$08
-        fcb     0,$60,$60,0,0
-        fcb     $20,$10,$08,$04,$02
-        * 48-57 digits 0-9
-        fcb     $3E,$51,$49,$45,$3E
-        fcb     0,$42,$7F,$40,0
-        fcb     $42,$61,$51,$49,$46
-        fcb     $21,$41,$45,$4B,$31
-        fcb     $18,$14,$12,$7F,$10
-        fcb     $27,$45,$45,$45,$39
-        fcb     $3C,$4A,$49,$49,$30
-        fcb     $01,$71,$09,$05,$03
-        fcb     $36,$49,$49,$49,$36
-        fcb     $06,$49,$49,$29,$1E
-        * 58-64 : ; < = > ? @
-        fcb     0,$36,$36,0,0
-        fcb     0,$56,$36,0,0
-        fcb     $08,$14,$22,$41,0
-        fcb     $14,$14,$14,$14,$14
-        fcb     0,$41,$22,$14,$08
-        fcb     $02,$01,$51,$09,$06
-        fcb     $32,$49,$79,$41,$3E
-        * 65-90 A-Z
-        fcb     $7E,$11,$11,$11,$7E
-        fcb     $7F,$49,$49,$49,$36
-        fcb     $3E,$41,$41,$41,$22
-        fcb     $7F,$41,$41,$22,$1C
-        fcb     $7F,$49,$49,$49,$41
-        fcb     $7F,$09,$09,$09,$01
-        fcb     $3E,$41,$49,$49,$7A
-        fcb     $7F,$08,$08,$08,$7F
-        fcb     0,$41,$7F,$41,0
-        fcb     $20,$40,$41,$3F,$01
-        fcb     $7F,$08,$14,$22,$41
-        fcb     $7F,$40,$40,$40,$40
-        fcb     $7F,$02,$0C,$02,$7F
-        fcb     $7F,$04,$08,$10,$7F
-        fcb     $3E,$41,$41,$41,$3E
-        fcb     $7F,$09,$09,$09,$06
-        fcb     $3E,$41,$51,$21,$5E
-        fcb     $7F,$09,$19,$29,$46
-        fcb     $46,$49,$49,$49,$31
-        fcb     $01,$01,$7F,$01,$01
-        fcb     $3F,$40,$40,$40,$3F
-        fcb     $1F,$20,$40,$20,$1F
-        fcb     $3F,$40,$38,$40,$3F
-        fcb     $63,$14,$08,$14,$63
-        fcb     $07,$08,$70,$08,$07
-        fcb     $61,$51,$49,$45,$43
-
-***********************************************************************
 * Strings
 ***********************************************************************
 TTitle  fcn     "SEA BATTLE ML"
