@@ -1185,10 +1185,11 @@ class MainWindow(QMainWindow):
         import sys
 
         candidates: list[Path] = []
+        exe_dir = Path(sys.executable).resolve().parent
         # Portable / PyInstaller: docs/ next to the executable
-        candidates.append(
-            Path(sys.executable).resolve().parent / "docs" / "user-guide"
-        )
+        candidates.append(exe_dir / "docs" / "user-guide")
+        # Windows embeddable: <root>/python/python.exe + <root>/docs/
+        candidates.append(exe_dir.parent / "docs" / "user-guide")
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             candidates.append(Path(meipass) / "docs" / "user-guide")

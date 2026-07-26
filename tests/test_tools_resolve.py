@@ -87,3 +87,24 @@ def test_default_xroar_ao_linux(monkeypatch):
     monkeypatch.setattr(tools_mod.sys, "platform", "linux")
     monkeypatch.delenv("COCOIDE_XROAR_AO", raising=False)
     assert default_xroar_ao() == "pulse"
+
+
+def test_bundle_tools_parent_of_embeddable_python(tmp_path, monkeypatch):
+    """Windows embeddable layout: <root>/python/python.exe + <root>/tools/."""
+    root = tmp_path / "CoCoIDE-win"
+    (root / "python").mkdir(parents=True)
+    tools = root / "tools"
+    tools.mkdir()
+    fake = tools / "decb.exe"
+    fake.write_bytes(b"MZ")
+    py = root / "python" / "python.exe"
+    py.write_bytes(b"")
+    monkeypatch.setattr(tools_mod.sys, "executable", str(py))
+    monkeypatch.setattr(tools_mod.sys, "frozen", False, raising=False)
+    monkeypatch.delenv("COCOIDE_DECB", raising=False)
+    monkeypatch.setattr("shutil.which", lambda n: None)
+    # Force Windows-style names for this test
+    monkeypatch.setattr(tools_mod, "_tool_filenames", lambda name: [f"{name}.exe", name])
+    monkeypatch.setattr(tools_mod, "_is_runnable", lambda p: p.is_file())
+    t = ToolPaths().resolve()
+    assert t.decb == str(fake.resolve())

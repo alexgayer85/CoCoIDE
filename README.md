@@ -8,8 +8,8 @@ Open-source **Tandy Color Computer** IDE — disk-first DECB workflow, modern BA
 
 | Package | Contents |
 |---------|----------|
-| **Linux x86_64 portable** | App + `tools/{xroar,decb,lwasm}` + examples |
-| **Windows x86_64 portable** | Same layout (when published) |
+| **Linux x86_64 portable** | App + `tools/{xroar,decb,lwasm}` + examples + user guide |
+| **Windows x86_64 portable** | Embeddable Python + PySide6 + `tools\*.exe` + examples + user guide |
 | **Source** | This repository (`pip` / `./run.sh`) |
 
 **CoCo ROM images are not included** (copyright). Configure legal dumps for XRoar before Run (see [Troubleshooting](docs/user-guide/10-troubleshooting.md)).
@@ -97,14 +97,20 @@ export COCOIDE_LWASM=/path/to/lwasm
 ## Building portable packages
 
 ```bash
-# Linux (uses tools on PATH → vendor/linux/tools)
+# Linux portable (uses tools on PATH → vendor/linux/tools)
 ./scripts/fetch_tools_linux.sh
 ./scripts/package_linux.sh
 # → dist/CoCoIDE-*-linux-x86_64.zip
+
+# Windows portable (built from Linux: embeddable CPython + official/MinGW tools)
+./scripts/fetch_tools_windows.sh      # needs mingw-w64 for decb.exe
+./scripts/package_windows_from_linux.sh
+# → dist/CoCoIDE-*-windows-x86_64.zip
 ```
 
-Windows (on a Windows host): stage `vendor/windows/tools/*.exe`, then run
-`scripts/package_windows.ps1`. Details: `packaging/THIRD_PARTY.md`.
+Optional native Windows freeze (PyInstaller on a Windows host): stage
+`vendor/windows/tools/*.exe`, then run `scripts/package_windows.ps1`.
+Details: `packaging/THIRD_PARTY.md`.
 
 ## Project layout
 

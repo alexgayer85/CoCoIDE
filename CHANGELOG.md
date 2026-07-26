@@ -2,7 +2,7 @@
 
 ## 0.1.0 — 2026-07-26
 
-First public release.
+First public release (Linux + Windows portables).
 
 ### Highlights
 
@@ -20,11 +20,13 @@ First public release.
 
 - Prefer bundled `tools/` binaries (portable layout) over system `PATH`
 - Platform-aware XRoar audio default (Pulse on Linux; native/default on Windows)
-- Linux portable zip script (`scripts/package_linux.sh`) with XRoar, `decb`, `lwasm`
-- Windows portable packaging script (`scripts/package_windows.ps1`) — binaries staged separately
+- Linux portable zip (`scripts/package_linux.sh`) with XRoar, `decb`, `lwasm`
+- Windows portable zip built from Linux (`scripts/package_windows_from_linux.sh`):
+  embeddable CPython 3.12 + PySide6 Essentials, launchers `CoCoIDE.vbs` / `.bat`,
+  official XRoar/LWTOOLS EXEs + MinGW-built `decb.exe`
 - Third-party attribution (`packaging/THIRD_PARTY.md`); **no CoCo ROMs** shipped
 
 ### Notes
 
-- You must supply legal CoCo ROM dumps for XRoar
+- You must supply legal CoCo ROM dumps for XRoar (`%USERPROFILE%\.xroar\roms\` on Windows)
 - XRoar is GPL-3+; source links in `THIRD_PARTY.md`

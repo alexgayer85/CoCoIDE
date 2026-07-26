@@ -12,10 +12,11 @@ CoCoIDE’s MIT license.
 
 | Component | Role | License | Upstream | Pin (v0.1.0) |
 |-----------|------|---------|----------|--------------|
-| XRoar | Emulator | GNU GPL v3 or later | https://www.6809.org.uk/xroar/ | 1.11 |
-| Toolshed `decb` | DECB disk images | Public domain | https://github.com/nitros9project/toolshed | 2.4.2 |
-| LWTOOLS `lwasm` | 6809 assembler | See upstream COPYING | https://www.lwtools.ca/ | 4.24 or 4.25 |
-| PySide6 / Qt | GUI | LGPL / GPL (Qt) | https://www.qt.io/ | freeze-time |
+| XRoar | Emulator | GNU GPL v3 or later | https://www.6809.org.uk/xroar/ | 1.11 (Linux sys / Windows w64 zip) |
+| Toolshed `decb` | DECB disk images | Public domain | https://github.com/nitros9project/toolshed | 2.4.2 Linux / 2.5.1 MinGW Windows |
+| LWTOOLS `lwasm` | 6809 assembler | See upstream COPYING | https://www.lwtools.ca/ | 4.24 Linux / 4.25 Windows win64 |
+| PySide6 / Qt | GUI | LGPL / GPL (Qt) | https://www.qt.io/ | freeze-time / Essentials on Windows |
+| CPython embeddable | Windows runtime | PSF | https://www.python.org/ | 3.12.x embed-amd64 |
 
 Exact binary versions in a given zip are listed in `tools/VERSIONS.txt` when
 present (written by `scripts/fetch_tools_*.sh`).

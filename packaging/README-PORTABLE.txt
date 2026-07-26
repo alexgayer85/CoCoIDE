@@ -4,8 +4,9 @@ CoCoIDE — portable package
 Quick start
 -----------
 1. Unzip this folder anywhere (path without exotic permissions is fine).
-2. Run the CoCoIDE executable in this directory
-   (Linux: ./CoCoIDE   Windows: CoCoIDE.exe).
+2. Run CoCoIDE:
+   - Linux:   ./CoCoIDE
+   - Windows: double-click CoCoIDE.vbs (or CoCoIDE.bat for a console)
 3. Open examples/hello (File → Open Project) or create a new project.
 4. Build Disk, then Run in XRoar.
 

@@ -36,18 +36,24 @@ def _bundle_tools_dir() -> Path | None:
     Search order:
     1. Next to frozen executable (PyInstaller onedir portable layout)
     2. PyInstaller _MEIPASS/tools (onefile extract dir)
-    3. Repo root tools/ (developer checkout: CoCoIDE/tools/)
-    4. Next to sys.executable (venv / portable without frozen flag)
+    3. Parent of executable dir (Windows embeddable: python/../tools)
+    4. Repo root tools/ (developer checkout: CoCoIDE/tools/)
+    5. Next to sys.executable
+    6. Current working directory tools/ (launchers often chdir to portable root)
     """
     candidates: list[Path] = []
+    exe_dir = Path(sys.executable).resolve().parent
     if getattr(sys, "frozen", False):
-        candidates.append(Path(sys.executable).resolve().parent / "tools")
+        candidates.append(exe_dir / "tools")
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             candidates.append(Path(meipass) / "tools")
+    # Windows embeddable layout: <root>/python/python.exe + <root>/tools/
+    candidates.append(exe_dir.parent / "tools")
+    candidates.append(exe_dir / "tools")
     # Dev checkout: cocoide/tools.py → parent.parent = repo root
     candidates.append(Path(__file__).resolve().parent.parent / "tools")
-    candidates.append(Path(sys.executable).resolve().parent / "tools")
+    candidates.append(Path.cwd() / "tools")
     for c in candidates:
         if c.is_dir():
             return c
