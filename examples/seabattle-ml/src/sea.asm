@@ -1048,8 +1048,10 @@ pt_fire
 pt_ms   leax    TMMiss,pcr
         lbra    pt_msg
 pt_sk   lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
         lbsr    PauseLong
-        lbsr    KeyFlush        ; Space fully up before computer / next input
+        lbsr    KeyFlush
         rts
 pt_al   leax    TMAlr,pcr
         lbsr    ShowMsg
@@ -1057,8 +1059,10 @@ pt_al   leax    TMAlr,pcr
         lbsr    KeyFlush
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!  — no Tone (PIA sound path freezes input)
+        * X → HIT!/MISS!
         lbsr    ShowMsg
+        lda     HT              ; 0 miss / 1 hit
+        lbsr    Tone
         lbsr    PauseMed
         lbsr    KeyFlush
         rts
@@ -1126,12 +1130,18 @@ ct_ac
         sta     HC
         leax    TMCht,pcr
         lbsr    ShowMsg
+        lda     #1
+        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMCms,pcr
         lbsr    ShowMsg
+        clra
+        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
         lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
 ct_end  lbsr    PauseLong
         leax    TMComp2,pcr
         lbsr    ShowMsg
@@ -2118,18 +2128,87 @@ KChar   fcb     0
 
 
 * Sound / RNG
-* HARD NO-OP. Any write to $FF01/$FF03 (keyboard PIA) during combat has
-* frozen input after the first shot on XRoar, even with save/restore.
-* Splash/title do not need sound. Revisit only with a DAC-only routine
-* that never touches PIA0, tested after hit/miss specifically.
+*
+* From Tepolt, Assembly Language Programming for the Color Computer (1985),
+* Ch.10 "Sound" + Listing 10-2 (SLTON):
+*   - DAC path needs selector on PIA1 CA2/CB2 ($FF01/$FF03) — KEYBOARD PIA.
+*   - That is what froze our game when hello-style beeps rewrote $FF03.
+*   - PB1 of PIA2 ($FF22 bit1) is a separate sound source; setup uses only
+*     $FF22/$FF23 (PIA2). AUDIO ON already routes audio; we only toggle PB1.
+*   - Never write $FF01/$FF03 here.
 ***********************************************************************
 SoundInit
+        * Configure PB1 as output once (Tepolt listing 10-2 lines 160-230).
+        pshs    a
+        lda     $FF23
+        anda    #$FB            ; bit2=0 → access DDRB
+        sta     $FF23
+        lda     $FF22
+        ora     #$02            ; PB1 = output
+        sta     $FF22
+        lda     $FF23
+        ora     #$04            ; bit2=1 → access DRB
+        sta     $FF23
+        puls    a
         rts
 
+* A=0 miss (low), 1 hit, 2+ sink/win. PB1 square wave only (no keyboard PIA).
 Tone
+        pshs    cc,a,b,x,y
+        orcc    #$50            ; IRQs off during click
+        * save PIA2 data/control only
+        lda     $FF23
+        sta     SvFF23
+        lda     $FF22
+        sta     SvFF22
+        * ensure DDRB has PB1 out, then DRB access (idempotent)
+        lda     $FF23
+        anda    #$FB
+        sta     $FF23
+        lda     $FF22
+        ora     #$02
+        sta     $FF22
+        lda     SvFF23
+        ora     #$04
+        sta     $FF23
+        * pitch / length from original A (at 1,s after pshs cc,a,b,x,y — careful)
+        * Stack after pshs cc,a,b,x,y: order X,Y,B,A,CC → ,s=CC 1,s=A
+        lda     1,s
+        tsta
+        beq     tn0
+        cmpa    #1
+        beq     tn1
+        ldb     #24             ; sink — more toggles
+        ldx     #18
+        bra     tng
+tn0     ldb     #12             ; miss — lower pitch (longer delay)
+        ldx     #40
+        bra     tng
+tn1     ldb     #16             ; hit
+        ldx     #24
+tng     lda     $FF22
+tn_lp   eora    #$02            ; toggle PB1 (Tepolt SLB)
+        sta     $FF22
+        tfr     x,y
+tn_d    leay    -1,y
+        bne     tn_d
+        decb
+        bne     tn_lp
+        * restore PIA2
+        lda     SvFF22
+        sta     $FF22
+        lda     SvFF23
+        sta     $FF23
+        puls    cc,a,b,x,y
+        rts
+
 Beep
+        lbra    Tone
 Click
         rts
+
+SvFF22  fcb     0
+SvFF23  fcb     0
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
