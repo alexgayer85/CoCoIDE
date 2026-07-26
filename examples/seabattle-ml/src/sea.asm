@@ -424,7 +424,7 @@ ap_fb   * fallback row=ShipId col=1 horizontal (always free on empty rows)
 ap_nxt  inc     ShipId
         lda     ShipId
         cmpa    #6
-        blo     ap_ship
+        lblo    ap_ship
         rts
 
 * ShipId (1..5) → B = length
