@@ -3,8 +3,9 @@
 30 PCLEAR4
 40 PMODE4,1:PCLS:SCREEN1,1
 50 AUDIO ON
-55 REM Load game ML first (black screen). NAVAL last so art is fresh at EXEC.
+55 REM SEA first (black), NAVAL last (art). EXEC addr must be game ML:
+56 REM LOADM"NAVAL" overwrites the EXEC vector from SEA's trailer.
 60 LOADM"SEA"
 70 LOADM"NAVAL"
-80 EXEC
+80 EXEC &H3F00
 90 END
