@@ -148,7 +148,8 @@ if (Test-Path $guideSrc) {
     Copy-Item -Recurse -Force (Join-Path $guideSrc "*") $guideDest
 }
 
-foreach ($ex in @("hello", "seabattle-ml")) {
+# User-facing demos (skip diag_fixture — internal test project)
+foreach ($ex in @("hello", "seabattle", "seabattle-ml", "sudoku")) {
     $src = Join-Path $Root "examples\$ex"
     if (Test-Path $src) {
         $dest = Join-Path $Stage "examples\$ex"
