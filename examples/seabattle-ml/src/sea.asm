@@ -345,7 +345,7 @@ PlaceEnemyFleet
 
 ***********************************************************************
 * Auto-place — NO CanPlace/Rand loops (those froze on P).
-* Pure linear stores. Variety = column offset 0..3 from Rnd once.
+* Pure linear stores. 8 distinct layouts via Rnd (entropy from WaitKey).
 * Player → PS, Enemy → ES
 ***********************************************************************
 AutoPlacePlayer
@@ -363,16 +363,28 @@ AutoFillGrid
 af_cl   clr     ,x+
         decb
         bne     af_cl
+        * spin RNG so player vs enemy (and re-runs) differ
+        lbsr    Rand
+        lbsr    Rand
+        lbsr    Rand
         lda     Rnd
-        anda    #3
+        anda    #7
         lbeq    afl0
         cmpa    #1
         lbeq    afl1
         cmpa    #2
         lbeq    afl2
-        lbra    afl3
+        cmpa    #3
+        lbeq    afl3
+        cmpa    #4
+        lbeq    afl4
+        cmpa    #5
+        lbeq    afl5
+        cmpa    #6
+        lbeq    afl6
+        lbra    afl7
 
-* layout 0: upper-left
+* 0: top-left pack
 afl0    tfr     u,x
         lda     #1
         sta     0,x
@@ -390,15 +402,15 @@ afl0    tfr     u,x
         sta     21,x
         sta     22,x
         lda     #4
-        sta     33,x
-        sta     34,x
-        sta     35,x
+        sta     40,x
+        sta     41,x
+        sta     42,x
         lda     #5
-        sta     48,x
-        sta     49,x
+        sta     60,x
+        sta     61,x
         lbra    af_done
 
-* layout 1: lower-right
+* 1: bottom-right pack
 afl1    tfr     u,x
         lda     #1
         sta     55,x
@@ -407,24 +419,24 @@ afl1    tfr     u,x
         sta     58,x
         sta     59,x
         lda     #2
-        sta     65,x
-        sta     66,x
-        sta     67,x
-        sta     68,x
-        lda     #3
+        sta     75,x
         sta     76,x
         sta     77,x
         sta     78,x
-        lda     #4
-        sta     84,x
+        lda     #3
         sta     85,x
         sta     86,x
+        sta     87,x
+        lda     #4
+        sta     93,x
+        sta     94,x
+        sta     95,x
         lda     #5
         sta     98,x
         sta     99,x
         lbra    af_done
 
-* layout 2: top-right + verticals
+* 2: top-right carrier + left verticals
 afl2    tfr     u,x
         lda     #1
         sta     5,x
@@ -433,14 +445,14 @@ afl2    tfr     u,x
         sta     8,x
         sta     9,x
         lda     #2
-        sta     19,x
-        sta     29,x
-        sta     39,x
-        sta     49,x
-        lda     #3
+        sta     20,x
+        sta     30,x
+        sta     40,x
         sta     50,x
-        sta     51,x
-        sta     52,x
+        lda     #3
+        sta     22,x
+        sta     32,x
+        sta     42,x
         lda     #4
         sta     70,x
         sta     71,x
@@ -450,30 +462,134 @@ afl2    tfr     u,x
         sta     91,x
         lbra    af_done
 
-* layout 3: mixed scatter
+* 3: bottom-left + top mid
 afl3    tfr     u,x
         lda     #1
-        sta     2,x
+        sta     90,x
+        sta     91,x
+        sta     92,x
+        sta     93,x
+        sta     94,x
+        lda     #2
         sta     3,x
         sta     4,x
         sta     5,x
         sta     6,x
+        lda     #3
+        sta     25,x
+        sta     26,x
+        sta     27,x
+        lda     #4
+        sta     48,x
+        sta     58,x
+        sta     68,x
+        lda     #5
+        sta     80,x
+        sta     81,x
+        lbra    af_done
+
+* 4: four corners scatter
+afl4    tfr     u,x
+        lda     #1
+        sta     0,x
+        sta     10,x
+        sta     20,x
+        sta     30,x
+        sta     40,x
         lda     #2
-        sta     22,x
-        sta     32,x
+        sta     9,x
+        sta     19,x
+        sta     29,x
+        sta     39,x
+        lda     #3
+        sta     70,x
+        sta     71,x
+        sta     72,x
+        lda     #4
+        sta     96,x
+        sta     97,x
+        sta     98,x
+        lda     #5
+        sta     55,x
+        sta     56,x
+        lbra    af_done
+
+* 5: center cross
+afl5    tfr     u,x
+        lda     #1
         sta     42,x
-        sta     52,x
+        sta     43,x
+        sta     44,x
+        sta     45,x
+        sta     46,x
+        lda     #2
+        sta     14,x
+        sta     24,x
+        sta     34,x
+        sta     54,x
         lda     #3
         sta     60,x
         sta     61,x
         sta     62,x
         lda     #4
         sta     8,x
+        sta     9,x
         sta     18,x
-        sta     28,x
         lda     #5
-        sta     95,x
-        sta     96,x
+        sta     90,x
+        sta     91,x
+        lbra    af_done
+
+* 6: right edge wall + bottom
+afl6    tfr     u,x
+        lda     #1
+        sta     9,x
+        sta     19,x
+        sta     29,x
+        sta     39,x
+        sta     49,x
+        lda     #2
+        sta     80,x
+        sta     81,x
+        sta     82,x
+        sta     83,x
+        lda     #3
+        sta     0,x
+        sta     1,x
+        sta     2,x
+        lda     #4
+        sta     55,x
+        sta     56,x
+        sta     57,x
+        lda     #5
+        sta     73,x
+        sta     74,x
+        lbra    af_done
+
+* 7: checker-ish spread
+afl7    tfr     u,x
+        lda     #1
+        sta     11,x
+        sta     12,x
+        sta     13,x
+        sta     14,x
+        sta     15,x
+        lda     #2
+        sta     37,x
+        sta     47,x
+        sta     57,x
+        sta     67,x
+        lda     #3
+        sta     70,x
+        sta     71,x
+        sta     72,x
+        lda     #4
+        sta     4,x
+        sta     5,x
+        sta     6,x
+        lda     #5
+        sta     93,x
+        sta     94,x
 af_done lbsr    Rand
         lbsr    Rand
         rts
@@ -737,17 +853,20 @@ pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseRead
+        lbsr    PauseShort
+        lbsr    KeyFlush
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!/SUNK!  — no Beep (has hung combat before)
+        * X → HIT!/MISS!/SUNK!  — no Beep; short pause only
         pshs    x
         lbsr    ClearMsg
         puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseRead
+        lbsr    PauseShort
+        * force key fully up so Space cannot auto-refire next WaitKey
+        lbsr    KeyFlush
         rts
 
 ComputerTurn
@@ -756,13 +875,12 @@ ComputerTurn
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseShort
         lbsr    AiPick
         lda     AR
         beq     ct_fix
         cmpa    #10
         bls     ct_ar
-ct_fix lda     #1
+ct_fix  lda     #1
         sta     AR
 ct_ar   lda     AC
         beq     ct_fc
@@ -806,8 +924,9 @@ ct_ac
         bra     ct_end
 ct_m    bra     ct_end
 ct_s    clr     Hunt
-ct_end  lbsr    PauseRead
+ct_end  lbsr    PauseShort
         lbsr    ClearMsg
+        lbsr    KeyFlush
         rts
 
 ClearMsg
@@ -825,21 +944,13 @@ cm1     sta     ,x+
         puls    a,b,x
         rts
 
-* Readable pause (~0.8–1.5s on 0.89MHz CoCo)
+* Short pauses only (long PauseRead felt like freezes after MISS)
 PauseRead
-        pshs    a,b,x
-        ldb     #18
-pr0     ldx     #$2800
-pr1     leax    -1,x
-        bne     pr1
-        decb
-        bne     pr0
-        puls    a,b,x
-        rts
+        bra     PauseShort
 PauseShort
         pshs    a,b,x
-        ldb     #6
-ps0     ldx     #$1800
+        ldb     #8
+ps0     ldx     #$1000
 ps1     leax    -1,x
         bne     ps1
         decb
@@ -849,7 +960,7 @@ ps1     leax    -1,x
 TinyPause
         bra     PauseShort
 PauseMed
-        bra     PauseRead
+        bra     PauseShort
 
 DrawBattleHUD
         leax    TYou,pcr
@@ -1632,32 +1743,52 @@ Font8
         fcb     $FF,$03,$06,$0C,$18,$30,$60,$FF  * Z
 
 ***********************************************************************
-* Keyboard — minimal POLCAT. Counters in B only (no BSS timer — a
-* failed KTimer write caused infinite release-wait on some keys e.g. P).
+* Keyboard — POLCAT with true key-up (bounded). Fixed auto-refire freeze:
+* old WaitKey only "drained" ~80 polls, so Space still held re-fired the
+* same cell after MISS (ALREADY loop looked like a hang).
 ***********************************************************************
 POLCAT  equ     $A000
 
+* Wait until no key (or timeout). Register counters only.
+KeyFlush
+        pshs    a,b,x
+        andcc   #$EF
+        ldx     #$3000
+kf1     jsr     [POLCAT]
+        anda    #$7F
+        beq     kf2
+        leax    -1,x
+        bne     kf1
+kf2     * brief settle
+        ldb     #0
+kf3     decb
+        bne     kf3
+        puls    a,b,x
+        rts
+
 WaitKey
         andcc   #$EF            ; IRQs on for keyboard scan
-        * drain any pending (bounded, register counter only)
-        ldb     #40
-wk_dr   jsr     [POLCAT]
-        decb
-        bne     wk_dr
-        * wait for key (A != 0)
-wk_wt   jsr     [POLCAT]
+        lbsr    Rand            ; entropy each wait
+        * ensure previous key is fully up first
+        lbsr    KeyFlush
+        * wait for key; bump Rnd every poll (title timing → variety)
+wk_wt   inc     Rnd
+        jsr     [POLCAT]
         anda    #$7F
         beq     wk_wt
         sta     KChar
-        * drain/release (bounded — NEVER infinite)
-        ldb     #80
+        * wait for key UP (timeout — never hang forever)
+        ldx     #$6000
 wk_up   jsr     [POLCAT]
-        decb
+        anda    #$7F
+        beq     wk_up0
+        leax    -1,x
         bne     wk_up
-        * small settle
+wk_up0  * small settle
         ldb     #0
 wk_st   decb
         bne     wk_st
+        lbsr    Rand
         lda     KChar
         anda    #$7F
         cmpa    #'a
@@ -1684,30 +1815,29 @@ SoundInit
         rts
 
 * Re-assert sound path then play (A=0 miss, 1 hit, 2 win/sink)
+* Stack-safe: single pshs/puls frame only.
 Beep
         pshs    a,b,x
-        * re-init mux each time (graphics mode can leave PIA odd)
         lda     $FF01
         ora     #$08
         sta     $FF01
         lda     #$3C
         sta     $FF03
         sta     $FF23
-        puls    a
-        pshs    a
+        lda     ,s              ; original A from stack
         tsta
         beq     bp0
         cmpa    #1
         beq     bp1
-        ldb     #40             ; sink / win
+        ldb     #40
         ldx     #20
         bra     bpg
-bp0     ldb     #18             ; miss — lower, longer
+bp0     ldb     #18
         ldx     #50
         bra     bpg
-bp1     ldb     #28             ; hit
+bp1     ldb     #28
         ldx     #28
-bpg     * same structure as hello/beep.asm
+bpg
 bp_o    lda     #$80
 bp_i    sta     $FF20
         eora    #$3F
@@ -1720,8 +1850,7 @@ bp_d    leax    -1,x
         bne     bp_i
         decb
         bne     bp_o
-        puls    a
-        puls    b,x
+        puls    a,b,x
         rts
 
 Click
@@ -1729,20 +1858,31 @@ Click
         lbra    Beep
 
 SeedRnd
+        * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
         lda     $0112
         eora    $0113
+        eora    $FF03
         bne     srok
         lda     #$A5
-srok    sta     Rnd
-        eora    #$5A
-        sta     Rnd
+srok    eora    #$5A
+        tsta
+        bne     srok2
+        lda     #$C3
+srok2   sta     Rnd
+        lbsr    Rand
+        lbsr    Rand
         rts
 Rand
         lda     Rnd
-        lsra
+        bne     rnz
+        lda     #$A5
+rnz     lsra
         bcc     rok
         eora    #$B4
-rok     sta     Rnd
+rok     tsta
+        bne     rok2
+        lda     #1
+rok2    sta     Rnd
         rts
 RandN
         sta     TmpN
@@ -1848,8 +1988,5 @@ RowN    zmb     1
 HT      zmb     1
 SID     zmb     1
 CP      zmb     1
-
-        end     START
-     zmb     1
 
         end     START
