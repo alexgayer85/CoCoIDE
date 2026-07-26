@@ -479,12 +479,18 @@ pp_done
         rts
 
 DrawPlaceHUD
-        * y=2 title, y=12 ship+orient, y=... hints kept short
+        * Wipe text rows first so shorter names do not leave "SHIP"/"OVE" junk
+        lda     #2
+        ldb     #16             ; y=2..17 title + ship line
+        lbsr    ClearRows
+        lda     #180
+        ldb     #8              ; status line
+        lbsr    ClearRows
         leax    TPlace,pcr
         lda     #8
         ldb     #2
         lbsr    DrawStr
-        * current craft name
+        * current craft name (max BATTLESHIP = 10 glyphs)
         lda     ShipId
         cmpa    #1
         beq     dph1
@@ -506,18 +512,19 @@ dph4    leax    TNSub,pcr
 dphn    lda     #8
         ldb     #12
         lbsr    DrawStr
-        * orientation
+        * orientation — fixed column after longest name
         tst     Horiz
         beq     dphv
         leax    TH,pcr
         bra     dpho
 dphv    leax    TV,pcr
-dpho    lda     #120
+dpho    lda     #104
         ldb     #12
         lbsr    DrawStr
+        * short hint: must fit in 256px (≤30 chars from x=8)
         leax    THint,pcr
         lda     #8
-        ldb     #180            ; status band (below scores)
+        ldb     #180
         lbsr    DrawStr
         rts
 
@@ -2173,7 +2180,7 @@ TShip   fcn     "SHIP"
 THV     fcn     ""
 TH      fcn     "HORIZ"
 TV      fcn     "VERT"
-THint   fcn     "WASD MOVE  R ROTATE  SPC PLACE  P AUTO"
+THint   fcn     "WASD MOVE  R ROT  SPC  P"
 TReady  fcn     "READY - KEY"
 TComp   fcn     "COMPUTER PLACES..."
 TYou    fcn     "YOUR FLEET"
