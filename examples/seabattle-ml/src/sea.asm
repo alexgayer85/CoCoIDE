@@ -1876,7 +1876,7 @@ Font8
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * $
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * %
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * &
-        fcb     $00,$00,$00,$00,$00,$00,$00,$00  * '
+        fcb     $18,$18,$10,$00,$00,$00,$00,$00  * '
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * (
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * )
         fcb     $00,$00,$00,$00,$00,$00,$00,$00  * *
@@ -2069,10 +2069,10 @@ TMHit   fcn     "HIT!"
 TMMiss  fcn     "MISS!"
 TMSunk  fcn     "SUNK "
 TMAlr   fcn     "ALREADY"
-TMComp  fcn     "COMPUTER TURN"
+TMComp  fcn     "COMPUTER'S TURN"
 TMCaim  fcn     "AIMING..."
 TMCht   fcn     "ENEMY HIT!"
-TMCms   fcn     "ENEMY MISS"
+TMCms   fcn     "COMPUTER MISSES"
 TMComp2 fcn     "COMP DONE"
 TWin    fcn     "YOU WIN!"
 TLose   fcn     "YOU LOSE"
