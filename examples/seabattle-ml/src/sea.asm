@@ -2309,42 +2309,51 @@ KChar   fcb     0
 
 * Sound / RNG
 *
-* Freezes came from STA #$3C to $FF01/$FF03 (keyboard PIA) clobbering
-* control bits. Tepolt: DAC=$FF20; mux uses CA2/CB2 — set with ORA only.
-* AUDIO ON + bit-set mux once; then stream dense $FF20 samples.
+* What worked: PB1 square on $FF22 (user heard audio). What froze: STA #$3C
+* to $FF01/$FF03. What was silent: DAC-only $FF20 without full mux.
 *
-* A=0 splash (noise)  1 hit (noise+dive)  2+ sink (longer)
+* Now: PB1 dense waveform (proven path) + parallel $FF20 DAC writes.
+* Mux: ORA #$08 only (never full-byte smash). A=0 splash 1 hit 2+ sink.
 ***********************************************************************
 SoundInit
-        pshs    a
-        * Enable DAC→TV mux WITHOUT replacing whole CR bytes (keeps keyboard)
+        pshs    a,b
+        * --- mux enable (bit-set only; keep keyboard CR intact) ---
         lda     $FF01
-        ora     #$08            ; CA2 contribute to select
+        ora     #$08
         sta     $FF01
         lda     $FF03
-        ora     #$08            ; CB2 contribute to select
+        ora     #$08
         sta     $FF03
         lda     $FF23
-        ora     #$08            ; PIA2 CB2 master switch on
+        ora     #$08            ; master switch
         sta     $FF23
-        * DAC bits PA7-PA2 as outputs: DDR A via CRA bit2
+        * --- PB1 output (Tepolt 10-2) ---
+        lda     $FF23
+        anda    #$FB
+        sta     $FF23
+        lda     $FF22
+        ora     #$02
+        sta     $FF22
+        lda     $FF23
+        ora     #$04
+        sta     $FF23
+        * --- DAC PA7-2 outputs ---
         lda     $FF21
-        anda    #$FB            ; access DDRA
+        anda    #$FB
         sta     $FF21
-        lda     #$FC            ; PA7-PA2 out (DAC), PA1-PA0 in
+        lda     #$FC
         sta     $FF20
         lda     $FF21
-        ora     #$04            ; access DRA again
+        ora     #$04
         sta     $FF21
         lda     #$80
         sta     $FF20
-        puls    a
+        puls    a,b
         rts
 
 Tone
         pshs    cc,a,b,x,y
         orcc    #$50
-        * re-assert master switch only (no full CR smash)
         lda     $FF23
         ora     #$08
         sta     $FF23
@@ -2354,70 +2363,89 @@ Tone
         cmpa    #1
         beq     sn_hit
         * sink
-        ldx     #$0480
-        lbsr    DacNoise
-        ldy     #25
-        ldb     #55
-        lbsr    DacDive
+        ldx     #500            ; many half-waves
+        ldy     #8
+        lbsr    FxNoise
+        ldy     #12
+        ldb     #45
+        lbsr    FxDive
         bra     sn_x
-sn_hit  ldx     #$0280
-        lbsr    DacNoise
-        ldy     #14
-        ldb     #40
-        lbsr    DacDive
+sn_hit  ldx     #280
+        ldy     #6
+        lbsr    FxNoise
+        ldy     #8
+        ldb     #35
+        lbsr    FxDive
         bra     sn_x
-sn_spl  ldx     #$0400          ; splash ~ dense hiss
-        lbsr    DacNoise
-        ldy     #45
-        ldb     #10
-        lbsr    DacDive
+sn_spl  ldx     #420            ; splash
+        ldy     #5
+        lbsr    FxNoise
+        ldy     #30
+        ldb     #8
+        lbsr    FxDive
 sn_x    lda     #$80
         sta     $FF20
         puls    cc,a,b,x,y
         rts
 
-* X = sample count. LFSR → DAC at ~audible rate (not 1 pop / 0.5s).
-DacNoise
-dn_lp   lda     Rnd
-        bne     dn_r
+* Dual out: toggle PB1 + write DAC from LFSR.
+* X = iterations, Y = base delay (half-period-ish, must be >=1)
+FxNoise
+fn_lp   lda     Rnd
+        bne     fn_r
         lda     #$A5
-dn_r    lsra
-        bcc     dn_o
+fn_r    lsra
+        bcc     fn_o
         eora    #$B4
-dn_o    sta     Rnd
-        lsla                    ; bits → PA7..PA2
+fn_o    sta     Rnd
+        * PB1 edge
+        lda     $FF22
+        eora    #$02
+        sta     $FF22
+        * DAC level
+        lda     Rnd
         lsla
-        ora     #2              ; keep a bit of activity
+        lsla
         sta     $FF20
-        * ~15-20µs-ish settle so host audio actually samples many levels
-        pshs    b
-        ldb     #12
-dn_w    decb
-        bne     dn_w
-        puls    b
+        * delay = base Y + (Rnd & 7)  → audible band, not sparse pops
+        pshs    y
+        lda     Rnd
+        anda    #7
+        leay    a,y
+        bne     fn_d
+        ldy     #1
+fn_d    leay    -1,y
+        bne     fn_d
+        puls    y
         leax    -1,x
-        bne     dn_lp
+        bne     fn_lp
         rts
 
-* Falling square on DAC. Y=half-period (>=1), B=steps.
-DacDive
-dd_lp   lda     #$FC
+* Falling tone on PB1+DAC. Y=start delay (>=1), B=steps
+FxDive
+fd_lp   lda     $FF22
+        eora    #$02
+        sta     $FF22
+        lda     #$FC
         sta     $FF20
         tfr     y,x
-        bne     dd_h
+        bne     fd_1
         ldx     #1
-dd_h    leax    -1,x
-        bne     dd_h
+fd_1    leax    -1,x
+        bne     fd_1
+        lda     $FF22
+        eora    #$02
+        sta     $FF22
         clra
         sta     $FF20
         tfr     y,x
-        bne     dd_l
+        bne     fd_2
         ldx     #1
-dd_l    leax    -1,x
-        bne     dd_l
-        leay    4,y
+fd_2    leax    -1,x
+        bne     fd_2
+        leay    3,y
         decb
-        bne     dd_lp
+        bne     fd_lp
         rts
 
 Beep
