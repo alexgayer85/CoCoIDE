@@ -2127,29 +2127,24 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG
-*
-* Tepolt Ch.10 / Listing 10-2: PB1 of PIA2 ($FF22 bit1) only — never $FF01/$FF03
-* (keyboard). Effects:
-*   A=0 miss  → splash (white-noise-ish random PB1 toggles)
-*   A=1 hit   → short explosion (noise burst + pitch dive)
-*   A=2+ sink → longer boom (noise + deeper dive)
+* Sound / RNG — PB1 of PIA2 only (Tepolt Ch.10). Never $FF01/$FF03.
+* A=0 splash (short noise)  A=1 boom (dive)  A=2+ longer boom
+* All loops hard-bounded — no nested delay subs (Y=0 can spin ~65K).
 ***********************************************************************
 SoundInit
         pshs    a
         lda     $FF23
-        anda    #$FB            ; bit2=0 → DDRB
+        anda    #$FB
         sta     $FF23
         lda     $FF22
-        ora     #$02            ; PB1 output
+        ora     #$02
         sta     $FF22
         lda     $FF23
-        ora     #$04            ; bit2=1 → DRB
+        ora     #$04
         sta     $FF23
         puls    a
         rts
 
-* Enter with A = effect id. Uses only $FF22/$FF23 (+ Rnd for noise).
 Tone
         pshs    cc,a,b,x,y
         orcc    #$50
@@ -2166,14 +2161,38 @@ Tone
         lda     SvFF23
         ora     #$04
         sta     $FF23
-        lda     1,s             ; original A (CC,A,B,X,Y push → A at 1,s)
+        lda     1,s             ; saved A
         tsta
-        lbeq    SndSplash
+        beq     SndSplash
         cmpa    #1
-        lbeq    SndBoom
-        lbra    SndSink
+        beq     SndBoom
+        * fall into SndSink
 
-* --- shared exit ---
+* --- sink: brief noise + pitch fall ---
+SndSink ldb     #20
+        bsr     NoiseBurst
+        ldx     #12
+        ldb     #28
+        bsr     PitchDive
+        bra     SndDone
+
+* --- hit: short noise + quick dive ---
+SndBoom ldb     #12
+        bsr     NoiseBurst
+        ldx     #6
+        ldb     #22
+        bsr     PitchDive
+        bra     SndDone
+
+* --- miss: short splash noise only (no long loop) ---
+SndSplash
+        ldb     #18
+        bsr     NoiseBurst
+        * two slower “drip” ticks
+        ldx     #35
+        ldb     #4
+        bsr     PitchDive
+
 SndDone lda     SvFF22
         sta     $FF22
         lda     SvFF23
@@ -2181,115 +2200,45 @@ SndDone lda     SvFF22
         puls    cc,a,b,x,y
         rts
 
-* Inline LFSR step → A = new Rnd (clobbers A only)
-Lfsr    lda     Rnd
-        bne     lf1
-        lda     #$A5
-lf1     lsra
-        bcc     lf2
+* B = number of random toggles (must be >0). Uses Rnd, clobbers A,X,Y.
+NoiseBurst
+nb_lp   lda     Rnd
+        bne     nb_r
+        lda     #$5A
+nb_r    lsra
+        bcc     nb_o
         eora    #$B4
-lf2     tsta
-        bne     lf3
-        lda     #1
-lf3     sta     Rnd
-        rts
-
-* Toggle PB1 once (preserves A via stack)
-Pb1Flip pshs    a
+nb_o    sta     Rnd
+        * toggle PB1
         lda     $FF22
         eora    #$02
         sta     $FF22
-        puls    a
-        rts
-
-* Delay Y iterations (Y destroyed)
-DlyY    leay    -1,y
-        bne     DlyY
-        rts
-
-***********************************************************************
-* Miss splash — dense random toggles ≈ white noise / water
-***********************************************************************
-SndSplash
-        ldb     #90             ; noise samples
-spl_lp  lbsr    Lfsr
-        * sometimes skip toggle → uneven crackle
-        bita    #1
-        beq     spl_sk
-        lbsr    Pb1Flip
-spl_sk  * short random delay 2..17
-        lda     Rnd
-        anda    #$0F
-        adda    #2
-        tfr     a,y
-        lbsr    DlyY
-        decb
-        bne     spl_lp
-        * soft “drip” tail — a few slower toggles
-        ldb     #6
-        ldx     #50
-spl_t   lbsr    Pb1Flip
-        tfr     x,y
-        lbsr    DlyY
-        leax    8,x
-        decb
-        bne     spl_t
-        lbra    SndDone
-
-***********************************************************************
-* Hit explosion — noise pop + falling pitch
-***********************************************************************
-SndBoom
-        * 1) sharp noise burst
-        ldb     #28
-bm_n    lbsr    Lfsr
-        lbsr    Pb1Flip
+        * delay 3..10 (never 0)
         lda     Rnd
         anda    #7
-        inca
+        adda    #3
         tfr     a,y
-        lbsr    DlyY
+nb_d    leay    -1,y
+        bne     nb_d
         decb
-        bne     bm_n
-        * 2) pitch dive (high → low)
-        ldx     #6              ; short delay = high pitch
-        ldb     #36
-bm_d    lbsr    Pb1Flip
-        tfr     x,y
-        lbsr    DlyY
-        lbsr    Pb1Flip
-        tfr     x,y
-        lbsr    DlyY
-        leax    2,x             ; lengthen delay → lower pitch
-        decb
-        bne     bm_d
-        lbra    SndDone
+        bne     nb_lp
+        rts
 
-***********************************************************************
-* Sink / win — longer noise + deeper boom
-***********************************************************************
-SndSink
-        ldb     #50
-sk_n    lbsr    Lfsr
-        bita    #2
-        beq     sk_sk
-        lbsr    Pb1Flip
-sk_sk   lda     Rnd
-        anda    #$0F
-        adda    #1
-        tfr     a,y
-        lbsr    DlyY
-        decb
-        bne     sk_n
-        ldx     #10
-        ldb     #50
-sk_d    lbsr    Pb1Flip
+* X = start delay (>=1), B = steps. Pitch falls as X grows.
+PitchDive
+pd_lp   lda     $FF22
+        eora    #$02
+        sta     $FF22
         tfr     x,y
-        lbsr    DlyY
-        leax    3,x
+        * if Y==0 would hang — force min 1
+        bne     pd_d
+        ldy     #1
+pd_d    leay    -1,y
+        bne     pd_d
+        leax    2,x
         decb
-        bne     sk_d
-        lbra    SndDone
+        bne     pd_lp
+        rts
 
 Beep
         lbra    Tone
