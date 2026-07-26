@@ -45,6 +45,7 @@ START
         lbsr    SeedRnd
         lbsr    InitGame
         lbsr    TitleScreen
+        lbsr    InstructScreen
         lbsr    PlacePlayerFleet
         lbsr    PlaceEnemyFleet
         lbsr    BattleLoop
@@ -104,32 +105,162 @@ c1      clr     ,x+
         rts
 
 ***********************************************************************
-* Title (bitmap)
+* Title — 1-bit dithered naval silhouette + clean copy
 ***********************************************************************
 TitleScreen
         lbsr    GfxCls
-        leax    TTitle,pcr
-        lda     #40             ; X multiple of 8 for fast blit
+        * sky dither band (light)
+        lda     #0
+        ldb     #36
+        leax    PatDitherLo,pcr
+        lbsr    FillBand
+        * water dither band (heavier)
+        lda     #100
         ldb     #40
+        leax    PatDitherHi,pcr
+        lbsr    FillBand
+        * ship silhouette mid-screen
+        lbsr    DrawShipArt
+        leax    TTitle,pcr
+        lda     #48
+        ldb     #8
         lbsr    DrawStr
         leax    TSub,pcr
-        lda     #32
-        ldb     #60
-        lbsr    DrawStr
-        leax    TCtrl,pcr
-        lda     #8
-        ldb     #100
-        lbsr    DrawStr
-        leax    TCtrl2,pcr
-        lda     #8
-        ldb     #112
+        lda     #40
+        ldb     #20
         lbsr    DrawStr
         leax    TGo,pcr
         lda     #40
-        ldb     #152
+        ldb     #168
         lbsr    DrawStr
         lbsr    WaitKey
         rts
+
+***********************************************************************
+* Instructions (second page before placement)
+***********************************************************************
+InstructScreen
+        lbsr    GfxCls
+        leax    TI0,pcr
+        lda     #8
+        ldb     #4
+        lbsr    DrawStr
+        leax    TI1,pcr
+        lda     #8
+        ldb     #24
+        lbsr    DrawStr
+        leax    TI2,pcr
+        lda     #8
+        ldb     #36
+        lbsr    DrawStr
+        leax    TI3,pcr
+        lda     #8
+        ldb     #48
+        lbsr    DrawStr
+        leax    TI4,pcr
+        lda     #8
+        ldb     #60
+        lbsr    DrawStr
+        leax    TI5,pcr
+        lda     #8
+        ldb     #80
+        lbsr    DrawStr
+        leax    TI6,pcr
+        lda     #8
+        ldb     #92
+        lbsr    DrawStr
+        leax    TI7,pcr
+        lda     #8
+        ldb     #104
+        lbsr    DrawStr
+        leax    TI8,pcr
+        lda     #8
+        ldb     #124
+        lbsr    DrawStr
+        leax    TI9,pcr
+        lda     #8
+        ldb     #136
+        lbsr    DrawStr
+        leax    TGo,pcr
+        lda     #40
+        ldb     #168
+        lbsr    DrawStr
+        lbsr    WaitKey
+        rts
+
+* A=startY B=rows X→2 alternating dither bytes (lo,hi pattern pair)
+FillBand
+        pshs    a,b,x,y
+        sta     TY
+        stb     Ht
+        tfr     x,y             ; Y = pattern base
+fb_row  lda     TY
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        leax    GFX,x
+        lda     TY
+        anda    #1
+        beq     fb_e0
+        lda     1,y
+        bra     fb_fill
+fb_e0   lda     ,y
+fb_fill ldb     #32
+fb_c    sta     ,x+
+        decb
+        bne     fb_c
+        inc     TY
+        dec     Ht
+        bne     fb_row
+        puls    a,b,x,y
+        rts
+
+PatDitherLo
+        fcb     $00,$22         ; sparse sky
+PatDitherHi
+        fcb     $55,$AA         ; denser water
+
+* 64×16 ship (8 bytes × 16 rows), 1-bit silhouette + deck dither
+DrawShipArt
+        pshs    a,b,x,y
+        leax    ShipArt,pcr
+        lda     #56             ; Y start
+        ldb     #GBPL
+        mul
+        tfr     d,y
+        leay    GFX+10,y        ; X ≈ 80 (byte 10)
+        ldb     #16             ; rows
+dsa_r   pshs    b
+        ldb     #8              ; bytes / row
+dsa_c   lda     ,x+
+        sta     ,y+
+        decb
+        bne     dsa_c
+        leay    24,y            ; next scanline (+32-8)
+        puls    b
+        decb
+        bne     dsa_r
+        puls    a,b,x,y
+        rts
+
+* Battleship bow→stern, smoke stack, hull dither (bit7=left)
+ShipArt
+        fcb     $00,$00,$00,$10,$00,$00,$00,$00
+        fcb     $00,$00,$00,$10,$00,$00,$00,$00
+        fcb     $00,$00,$00,$38,$00,$00,$00,$00
+        fcb     $00,$00,$01,$FE,$00,$00,$00,$00
+        fcb     $00,$00,$07,$FF,$80,$00,$00,$00
+        fcb     $00,$00,$0F,$FF,$C0,$00,$00,$00
+        fcb     $00,$00,$1F,$FF,$E0,$00,$00,$00
+        fcb     $00,$00,$3F,$FF,$F0,$00,$00,$00
+        fcb     $00,$00,$7F,$FF,$F8,$00,$00,$00
+        fcb     $00,$00,$FF,$FF,$FC,$00,$00,$00
+        fcb     $00,$01,$FF,$FF,$FE,$00,$00,$00
+        fcb     $00,$03,$FF,$FF,$FF,$00,$00,$00
+        fcb     $00,$07,$FF,$FF,$FF,$80,$00,$00
+        fcb     $00,$0F,$FF,$FF,$FF,$C0,$00,$00
+        fcb     $00,$1F,$AA,$55,$AA,$E0,$00,$00
+        fcb     $00,$00,$00,$00,$00,$00,$00,$00
 
 ***********************************************************************
 * Placement
@@ -863,8 +994,13 @@ pt_msg
         rts
 
 ComputerTurn
+        * Dramatic beat: announce, think, fire, result linger
         leax    TMComp,pcr
         lbsr    ShowMsg
+        lbsr    PauseLong
+        leax    TMCaim,pcr
+        lbsr    ShowMsg
+        lbsr    PauseMed
         lbsr    AiPick
         lda     AR
         beq     ct_fix
@@ -895,6 +1031,17 @@ ct_ac
         sta     RR
         lda     AC
         sta     CC
+        * flash target cell (solid, then result glyph)
+        lbsr    CellOrigin
+        lda     #$FF
+        lbsr    CellFillA
+        lbsr    PauseShort
+        lbsr    DrawOneCell
+        lbsr    PauseShort
+        lbsr    CellOrigin
+        lda     #$FF
+        lbsr    CellFillA
+        lbsr    PauseShort
         lbsr    DrawOneCell
         lbsr    DrawScores
         lda     HT
@@ -907,12 +1054,12 @@ ct_ac
         sta     HR
         lda     AC
         sta     HC
-        leax    TMHit,pcr
+        leax    TMCht,pcr
         lbsr    ShowMsg
         lda     #1
         lbsr    Tone
         bra     ct_end
-ct_m    leax    TMMiss,pcr
+ct_m    leax    TMCms,pcr
         lbsr    ShowMsg
         clra
         lbsr    Tone
@@ -921,7 +1068,8 @@ ct_s    clr     Hunt
         lbsr    MsgSunk
         lda     #2
         lbsr    Tone
-ct_end  lbsr    PauseMed
+ct_end  lbsr    PauseLong
+        lbsr    PauseMed
         lbsr    ClearMsg
         rts
 
@@ -1267,31 +1415,36 @@ ait_bad orcc    #$01
         rts
 
 ***********************************************************************
-* Game over — message ABOVE the grids (not over cells at y=80).
-* Boards stay visible; banner uses y=2..16, hint uses status line y=180.
+* Game over — boards stay; result text ABOVE them (y=0..23 only).
+* Never draw at y=80 (that is through the grids).
 ***********************************************************************
 GameOver
         lbsr    DrawBattle
-        lbsr    ClearTopBanner  ; wipe y=0..19 so text is clean
+        * wipe rows 0..23 (everything above LY0 boards) + solid bar
+        lbsr    ClearTopBanner
+        * double-height feel: two text rows in the free banner
         lda     EH
         bne     gol
         leax    TWin,pcr
         bra     gow
 gol     leax    TLose,pcr
-gow     lda     #80             ; centered-ish above both boards
-        ldb     #4
+gow     lda     #72
+        ldb     #2
         lbsr    DrawStr
         leax    TGo,pcr
-        lbsr    ShowMsg         ; status band under scores, not on grid
+        lda     #40
+        ldb     #12
+        lbsr    DrawStr
+        lbsr    PauseLong
         lbsr    PauseLong
         lbsr    WaitKey
         rts
 
-* Clear scanlines 0..19 (above LY0=24 boards)
+* Clear scanlines 0..23 (strictly above board LY0=24)
 ClearTopBanner
         pshs    a,b,x
         ldx     #GFX
-        ldb     #20             ; 20 rows
+        ldb     #24
 ctb_r   pshs    b
         ldb     #32
         clra
@@ -2028,8 +2181,8 @@ rn1     lda     #1
 
 * Strings
 ***********************************************************************
-TTitle  fcn     "SEA BATTLE ML"
-TSub    fcn     "PMODE4 DUAL BOARD"
+TTitle  fcn     "SEA BATTLE"
+TSub    fcn     "DUAL BOARD DUEL"
 TCtrl   fcn     "WASD MOVE  R ROTATE"
 TCtrl2  fcn     "SPACE PUT  P AUTO"
 TGo     fcn     "PRESS ANY KEY"
@@ -2050,7 +2203,10 @@ TMHit   fcn     "HIT!"
 TMMiss  fcn     "MISS!"
 TMSunk  fcn     "SUNK "
 TMAlr   fcn     "ALREADY"
-TMComp  fcn     "COMPUTER"
+TMComp  fcn     "COMPUTER TURN"
+TMCaim  fcn     "AIMING..."
+TMCht   fcn     "ENEMY HIT!"
+TMCms   fcn     "ENEMY MISS"
 TMComp2 fcn     "COMP DONE"
 TWin    fcn     "YOU WIN!"
 TLose   fcn     "YOU LOSE"
@@ -2059,6 +2215,16 @@ TNBatt  fcn     "BATTLESHIP"
 TNCrui  fcn     "CRUISER"
 TNSub   fcn     "SUB"
 TNDest  fcn     "DESTROYER"
+TI0     fcn     "HOW TO PLAY"
+TI1     fcn     "WASD  MOVE CURSOR"
+TI2     fcn     "SPACE PLACE / FIRE"
+TI3     fcn     "R     ROTATE SHIP"
+TI4     fcn     "P     AUTO-PLACE"
+TI5     fcn     "LEFT  YOUR FLEET"
+TI6     fcn     "RIGHT ENEMY RADAR"
+TI7     fcn     "SINK ALL 17 HITS"
+TI8     fcn     "O  MISS    X  HIT"
+TI9     fcn     "STATUS LINE BELOW"
 TmpCh   zmb     1
 TmpTone zmb     1
 
