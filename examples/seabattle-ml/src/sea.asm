@@ -479,12 +479,17 @@ pp_done
         rts
 
 DrawPlaceHUD
-        * Wipe text rows first so shorter names do not leave "SHIP"/"OVE" junk
+        * Wipe full glyph height (8 rows each). Clearing only to y=17 left
+        * scanlines 18-19 of the ship line dirty — bottom of HORIZ's Z
+        * showed as "_" after switching to VERT.
         lda     #2
-        ldb     #16             ; y=2..17 title + ship line
+        ldb     #8              ; title line y=2..9
+        lbsr    ClearRows
+        lda     #12
+        ldb     #8              ; ship/orient line y=12..19
         lbsr    ClearRows
         lda     #180
-        ldb     #8              ; status line
+        ldb     #8              ; status line y=180..187
         lbsr    ClearRows
         leax    TPlace,pcr
         lda     #8
