@@ -21,27 +21,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up MSYS2 (Toolshed / decb.exe)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: mingw-w64-ucrt-x86_64-gcc make git
-
-      - name: Build Toolshed decb.exe
-        shell: msys2 {0}
-        run: |
-          set -e
-          mkdir -p vendor/windows/tools
-          git clone --depth 1 https://github.com/nitros9project/toolshed.git /tmp/toolshed
-          cd /tmp/toolshed/build/unix
-          make CC=gcc WIN=1 \
-            DIRS="libtoolshed libnative libcecb librbf libcoco libdecb libmisc libsys decb" \
-            all
-          cp -f decb/decb.exe "$GITHUB_WORKSPACE/vendor/windows/tools/decb.exe"
-          ls -la "$GITHUB_WORKSPACE/vendor/windows/tools/decb.exe"
-
-      - name: Fetch XRoar + LWTOOLS
+      - name: Fetch Windows tools (xroar, lwasm, decb)
         shell: pwsh
         run: ./scripts/fetch_tools_windows.ps1
 
@@ -75,5 +55,5 @@ jobs:
           if (-not $zip) { throw "zip missing" }
           $tag = gh release list --limit 5 --json tagName --jq ".[0].tagName"
           if (-not $tag) { throw "No GitHub release to attach to" }
-          Write-Host "Uploading $($zip.Name) to release $tag (replaces prior Windows zip if same name)"
+          Write-Host "Uploading $($zip.Name) to release $tag"
           gh release upload $tag $zip.FullName --clobber

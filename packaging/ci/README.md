@@ -32,12 +32,17 @@ git push origin main
   Attaches `CoCoIDE-*-windows-x86_64.zip` (with `CoCoIDE.exe`) to the latest release.  
 - Or push a `v*` tag (also attaches to that release).
 
+### If you already added an older workflow copy
+
+Replace `.github/workflows/windows-pyinstaller.yml` with the current
+`packaging/ci/windows-pyinstaller.yml` (no MSYS2 / Toolshed compile —
+`decb.exe` is downloaded as a prebuilt PE from the v0.1.0 release assets).
+
 ### Local Windows build (no Actions)
 
 ```powershell
-# Needs: Python 3.12, Git, MSYS2 UCRT64 with gcc + make
-# Build decb.exe in MSYS2, then:
+# Needs: Python 3.12 on PATH
 .\scripts\fetch_tools_windows.ps1
 .\scripts\package_windows.ps1
-# → dist\CoCoIDE-<ver>-windows-x86_64.zip
+# → dist\CoCoIDE-<ver>-windows-x86_64.zip with CoCoIDE.exe
 ```
