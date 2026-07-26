@@ -5,7 +5,7 @@
   "dialect": "decb",
   "entry": "src/main.bas",
   "disk_image": "build/work.dsk",
-  "auto_run": false,
+  "auto_run": true,
   "preprocessor": false,
   "standalone": [],
   "asm_sources": [

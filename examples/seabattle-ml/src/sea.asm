@@ -701,7 +701,7 @@ pt_al   leax    TMAlr,pcr
         lbsr    DrawStr
         lda     #0
         lbsr    Beep
-        lbsr    WaitKey
+        lbsr    PauseMed
         lbra    pt_i
 pt_msg  lda     #8
         ldb     #180
@@ -716,14 +716,15 @@ pt_b0   clra
         bra     pt_bb
 pt_b2   lda     #2
 pt_bb   lbsr    Beep
-        lbsr    WaitKey
+        lbsr    PauseMed        ; auto-continue (no WaitKey freeze)
         rts
 
 ComputerTurn
         leax    TMComp,pcr
-        lda     #80
+        lda     #8
         ldb     #180
         lbsr    DrawStr
+        lbsr    PauseShort
         lbsr    AiPick
         lda     AR
         sta     TmpR
@@ -731,7 +732,6 @@ ComputerTurn
         sta     TmpC
         clra
         lbsr    ApplyShot
-        * refresh only the hit cell on player fleet
         lda     #0
         sta     BoardWhich
         lda     #LX0
@@ -765,7 +765,26 @@ ct_m    clra
 ct_s    clr     Hunt
         lda     #2
 ct_b    lbsr    Beep
-        lbsr    WaitKey
+        lbsr    PauseMed
+        rts
+
+* Fixed delays (register only — never hang on keyboard)
+PauseShort
+        pshs    d,x
+        ldx     #$1800
+ps1     leax    -1,x
+        bne     ps1
+        puls    d,x
+        rts
+PauseMed
+        pshs    d,x
+        ldb     #6
+pm1     ldx     #$2000
+pm2     leax    -1,x
+        bne     pm2
+        decb
+        bne     pm1
+        puls    d,x
         rts
 
 DrawBattleHUD
@@ -1107,6 +1126,7 @@ CellOrigin
         puls    a,b
         rts
 
+* CellVal = raw grid byte; GType = 0 empty 1 ship 2 miss 3 hit
 CellGlyph
         lda     BoardWhich
         bne     cg_r
@@ -1117,20 +1137,19 @@ cg_g    lda     RR
         ldb     CC
         lbsr    CellAddr
         lda     ,x
+        sta     CellVal
         tsta
         beq     cg0
         lda     BoardWhich
         bne     cg_rad
-        * fleet: 1-5 ship, 6 miss, 7 hit
-        lda     ,x
+        lda     CellVal
         cmpa    #6
         beq     cg2
         cmpa    #7
         beq     cg3
         lda     #1
         rts
-cg_rad  * radar: 1 miss, 2 hit
-        lda     ,x
+cg_rad  lda     CellVal
         cmpa    #1
         beq     cg2
         lda     #3
@@ -1142,57 +1161,52 @@ cg2     lda     #2
 cg3     lda     #3
         rts
 
-* DrawCell: GType + X0,Y0. X0 multiple of 8, CELL=8.
-* 0 empty hollow  1 ship solid  2 miss  3 hit solid
+* DrawCell using 8-byte patterns (ships look like mini hulls, not solid bars)
 DrawCell
         lda     GType
-        beq     dc_emp
+        beq     dc_pat_e
         cmpa    #2
-        beq     dc_miss
-        lda     #$FF            ; solid
-        lbra    CellFillA
-dc_miss lda     #$00
-        lbsr    CellFillA
-        * center blot
-        lda     Y0
-        adda    #3
-        ldb     #GBPL
+        beq     dc_pat_m
+        cmpa    #3
+        beq     dc_pat_h
+        * ship id 1..5 → pattern
+        lda     CellVal
+        beq     dc_s1
+        cmpa    #5
+        bls     dc_sok
+        lda     #1
+dc_sok  deca
+        ldb     #8
         mul
-        tfr     d,x
-        lda     X0
-        lsra
-        lsra
-        lsra
-        leax    a,x
-        leax    GFX,x
-        lda     #$3C
-        sta     ,x
-        lda     GBPL
-        leax    a,x
-        lda     #$3C
-        sta     ,x
-        rts
-dc_emp
-        * hollow box: top/bottom $FF, sides $81
-        lbsr    CellAddrByte    ; X → first byte of cell
-        lda     #$FF
-        sta     ,x
-        ldb     #6
+        leax    PatShip,pcr
+        leax    d,x
+        bra     CellBlit
+dc_s1   leax    PatShip,pcr
+        bra     CellBlit
+dc_pat_m
+        leax    PatMiss,pcr
+        bra     CellBlit
+dc_pat_h
+        leax    PatHit,pcr
+        bra     CellBlit
+dc_pat_e
+        leax    PatEmpty,pcr
+* X → 8 row bytes; blit to X0,Y0
+CellBlit
+        pshs    x
+        lbsr    CellAddrByte
+        tfr     x,y             ; Y = screen
+        puls    x               ; X = pattern
+        ldb     #8
+cbl     lda     ,x+
+        sta     ,y
         lda     #GBPL
-dce1    leax    a,x
-        pshs    a
-        lda     #$81
-        sta     ,x
-        puls    a
+        leay    a,y
         decb
-        bne     dce1
-        lda     #GBPL
-        leax    a,x
-        lda     #$FF
-        sta     ,x
+        bne     cbl
         rts
 
-* Fill 8 rows at X0,Y0 with byte in A
+* Solid fill for cursor (A = fill byte)
 CellFillA
         sta     TmpB
         lbsr    CellAddrByte
@@ -1206,6 +1220,19 @@ cfa1    sta     ,x
         decb
         bne     cfa1
         rts
+
+PatEmpty
+        fcb     $FF,$81,$81,$81,$81,$81,$81,$FF
+PatMiss
+        fcb     $00,$00,$18,$3C,$3C,$18,$00,$00
+PatHit
+        fcb     $81,$42,$24,$18,$18,$24,$42,$81
+PatShip
+        fcb     $00,$3C,$7E,$FF,$FF,$7E,$3C,$18
+        fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18
+        fcb     $00,$00,$3C,$7E,$7E,$3C,$00,$00
+        fcb     $00,$18,$3C,$7E,$3C,$18,$00,$00
+        fcb     $00,$00,$18,$3C,$3C,$18,$00,$00
 
 * X0,Y0 → X = &GFX + Y*32 + X/8
 CellAddrByte
@@ -1705,6 +1732,7 @@ RY      zmb     1
 Wd      zmb     1
 Ht      zmb     1
 GType   zmb     1
+CellVal zmb     1
 PixX    zmb     1
 PixY    zmb     1
 PX      zmb     1

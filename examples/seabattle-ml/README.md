@@ -34,9 +34,10 @@ After a result message, press a key to continue.
 
 | Cell | Meaning |
 |------|---------|
-| Empty / dot | Water / unknown |
-| Solid block | Your ship (left) or hit |
-| Small block | Miss |
+| Hollow box | Water / unknown |
+| Mini hull shapes | Your ships (left board; size/style by type) |
+| Small blob | Miss |
+| X | Hit |
 
 ## Layout
 
