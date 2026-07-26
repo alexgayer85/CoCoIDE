@@ -105,11 +105,12 @@ c1      clr     ,x+
         rts
 
 ***********************************************************************
-* Title — full-screen PMODE 4 splash (src/naval_pmode4.bin → $0E00)
+* Title — main.bas LOADM"NAVAL" paints $0E00 before EXEC.
+* BlitSplash re-paints from embedded copy (fallback) then key prompt.
 ***********************************************************************
 TitleScreen
-        lbsr    BlitSplash      ; 6144-byte naval art to graphics page
-        * dark bar at bottom so "PRESS ANY KEY" stays readable
+        lbsr    BlitSplash
+        * dark bar so prompt is readable on busy art
         lda     #176
         ldb     #16
         lbsr    ClearRows
@@ -120,20 +121,22 @@ TitleScreen
         lbsr    WaitKey
         rts
 
-* Copy Splash (raw PMODE4 frame) → GFX. Uses D as word copy.
+* Splash → $0E00 (absolute X). Byte loop — no auto-inc surprises.
 BlitSplash
-        pshs    a,b,x,y,u
-        leax    Splash,pcr
+        pshs    a,b,x,y
+        ldx     #Splash
         ldy     #GFX
-        ldu     #6144/2         ; word count
-bs_lp   ldd     ,x++
-        std     ,y++
-        leau    -1,u
+        ldd     #6144
+bs_lp   pshs    b
+        ldb     ,x+
+        stb     ,y+
+        puls    b
+        subd    #1
         bne     bs_lp
-        puls    a,b,x,y,u
+        puls    a,b,x,y
         rts
 
-* A=startY B=row count — clear full-width black bars
+* A=startY B=rows — black bar on GFX page
 ClearRows
         pshs    a,b,x
         sta     TY

@@ -53,13 +53,12 @@ After a result message, press a key to continue.
 
 | File | Role |
 |------|------|
-| `src/main.bas` | `CLEAR` / `PCLEAR4` / `PMODE4,1` / `SCREEN1,1` / `AUDIO ON` / `LOADM"SEA"` / `EXEC` |
-| `src/sea.asm` | Game + PMODE 4 draw + keyboard |
-| `src/naval_pmode4.bin` | Title splash — raw **6144-byte** PMODE 4 framebuffer (blitted to `$0E00`) |
+| `src/main.bas` | Loader: `PMODE4` → `LOADM"NAVAL"` → `LOADM"SEA"` → `EXEC` |
+| `src/naval.asm` | Splash LOADM image → **`$0E00`** (full PMODE 4 page) |
+| `src/naval_pmode4.bin` | Raw **6144-byte** PMODE 4 framebuffer (included by `naval.asm` + embedded fallback in `sea.asm`) |
+| `src/sea.asm` | Game ML at **`$3F00`** |
 
-ML load address **`$3F00`**. Graphics page **`$0E00`** (standard after `PCLEAR 4`).
-
-Replace the splash by overwriting `src/naval_pmode4.bin` with another 256×192 / 1-bit PMODE 4 dump (exactly 6144 bytes) and rebuilding.
+Replace the splash by overwriting `src/naval_pmode4.bin` (exactly 6144 bytes) and rebuilding.
 
 ## Why matrix keys?
 

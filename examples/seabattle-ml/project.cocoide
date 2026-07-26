@@ -9,6 +9,7 @@
   "preprocessor": false,
   "standalone": [],
   "asm_sources": [
+    "src/naval.asm",
     "src/sea.asm"
   ],
   "roms": {},
