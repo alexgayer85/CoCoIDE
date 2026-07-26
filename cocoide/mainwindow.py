@@ -1192,18 +1192,67 @@ class MainWindow(QMainWindow):
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
+    def _about_mascot_path(self) -> Path | None:
+        """Bundled mascot, then ~/coco.jpg."""
+        bundled = Path(__file__).resolve().parent / "assets" / "coco.jpg"
+        if bundled.is_file():
+            return bundled
+        home = Path.home() / "coco.jpg"
+        if home.is_file():
+            return home
+        return None
+
     def _about(self) -> None:
-        QMessageBox.about(
-            self,
-            "About CoCoIDE",
-            f"<h3>CoCoIDE {__version__}</h3>"
-            "<p>Tandy Color Computer IDE — Disk Extended BASIC</p>"
-            "<p>Integrates XRoar, Toolshed <code>decb</code>, and LWTOOLS "
-            "(lwasm).</p>"
-            f"<p>Tools: {self.tools.status_line()}</p>"
-            "<p>F1 for Help</p>"
-            "<p>(C) Alex Gayer 2026</p>",
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About CoCoIDE")
+        dlg.setModal(True)
+        dlg.setMinimumWidth(480)
+        root = QHBoxLayout(dlg)
+        root.setSpacing(20)
+        root.setContentsMargins(20, 16, 20, 16)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(8)
+        body = QLabel(
+            f"<h2 style='margin:0 0 8px 0;'>CoCoIDE {__version__}</h2>"
+            "<p style='margin:4px 0;'>Tandy Color Computer IDE — Disk Extended BASIC</p>"
+            "<p style='margin:4px 0;'>Integrates XRoar, Toolshed <code>decb</code>, "
+            "and LWTOOLS (lwasm).</p>"
+            f"<p style='margin:4px 0;'>Tools: {self.tools.status_line()}</p>"
+            "<p style='margin:4px 0;'>F1 for Help</p>"
+            "<p style='margin:12px 0 0 0;'>(C) Alex Gayer 2026</p>"
         )
+        body.setTextFormat(Qt.TextFormat.RichText)
+        body.setWordWrap(True)
+        body.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        text_col.addWidget(body)
+        text_col.addStretch(1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dlg.accept)
+        text_col.addWidget(buttons)
+        root.addLayout(text_col, stretch=1)
+
+        mascot = self._about_mascot_path()
+        if mascot is not None:
+            pix = QPixmap(str(mascot))
+            if not pix.isNull():
+                # Portrait mascot — keep on the right, max ~220px tall
+                scaled = pix.scaled(
+                    QSize(160, 240),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                img = QLabel()
+                img.setPixmap(scaled)
+                img.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop)
+                img.setStyleSheet(
+                    "QLabel { background: transparent; padding: 0; border: none; }"
+                )
+                root.addWidget(img, stretch=0)
+
+        dlg.exec()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if self._dirty and not self._confirm_discard():
