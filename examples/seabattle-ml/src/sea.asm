@@ -313,14 +313,12 @@ pp_bad
         lbsr    Click
         lbra    pp_in
 pp_auto
-        lbsr    Click
+        * NO sound/Click here — Beep has hung this path before
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
-        bra     pp_done
 pp_done
         lbsr    DrawBoardsOnly
-        lbsr    Click
         rts
 
 DrawPlaceHUD
@@ -346,85 +344,82 @@ PlaceEnemyFleet
         rts
 
 ***********************************************************************
-* Auto-place fleets with variety. Bounded attempts + fixed fallback.
-* A = 0 player (PS), 1 enemy (ES)
+* Auto-place — NO CanPlace/Rand loops (those froze on P).
+* Pure linear stores. Variety = column offset 0..3 from Rnd once.
+* Player → PS, Enemy → ES
 ***********************************************************************
 AutoPlacePlayer
-        clra
-        bra     AutoPlaceFleet
+        ldx     #PS
+        bra     AutoFillGrid
 
 AutoPlaceFleet
-        sta     PlaceGrid
-        * choose base grid
-        tsta
-        bne     ap_es
-        ldx     #PS
-        bra     ap_clr
-ap_es   ldx     #ES
-ap_clr  ldb     #100
-ap_cl1  clr     ,x+
+        * A ignored; enemy always ES
+        ldx     #ES
+        * fall through
+AutoFillGrid
+        * X = base of 100-byte grid
+        pshs    x
+        ldb     #100
+af_cl   clr     ,x+
         decb
-        bne     ap_cl1
+        bne     af_cl
+        puls    x
+        * column offset 0..3 for variety
+        lda     Rnd
+        anda    #3
+        sta     TmpC            ; 0..3 column offset
+        * ship1 row0 len5
+        pshs    x
+        ldb     TmpC
+        abx
         lda     #1
-        sta     ShipId
-ap_ship lbsr    ShipLen
-        stb     TmpL
-        clr     Tries
-ap_try  inc     Tries
-        lda     Tries
-        cmpa    #50
-        bhi     ap_fb
-        lbsr    Rand
-        anda    #1
-        sta     Horiz
-        * row 1..10
-        lda     #10
-        lbsr    RandN
-        sta     TmpR
-        * col 1..10
-        lda     #10
-        lbsr    RandN
-        sta     TmpC
-        * clamp start so ship fits
-        lda     Horiz
-        beq     ap_vfit
-        lda     #11
-        suba    TmpL            ; max start col
-        cmpa    #1
-        bhs     ap_hc
-        lda     #1
-ap_hc   cmpa    TmpC
-        bhs     ap_go            ; max >= TmpC OK
-        sta     TmpC
-        bra     ap_go
-ap_vfit lda     #11
-        suba    TmpL
-        cmpa    #1
-        bhs     ap_vc
-        lda     #1
-ap_vc   cmpa    TmpR
-        bhs     ap_go
-        sta     TmpR
-ap_go   lda     PlaceGrid
-        sta     TmpG
-        lbsr    CanPlace
-        lda     CP
-        beq     ap_try
-        lbsr    PlaceShipRaw
-        bra     ap_nxt
-ap_fb   * fallback row=ShipId col=1 horizontal (always free on empty rows)
-        lda     ShipId
-        sta     TmpR
-        lda     #1
-        sta     TmpC
-        sta     Horiz
-        lda     PlaceGrid
-        sta     TmpG
-        lbsr    PlaceShipRaw
-ap_nxt  inc     ShipId
-        lda     ShipId
-        cmpa    #6
-        lblo    ap_ship
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        puls    x
+        * ship2 row1 len4
+        pshs    x
+        leax    10,x
+        ldb     TmpC
+        abx
+        lda     #2
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        puls    x
+        * ship3 row2 len3
+        pshs    x
+        leax    20,x
+        ldb     TmpC
+        abx
+        lda     #3
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        puls    x
+        * ship4 row3 len3
+        pshs    x
+        leax    30,x
+        ldb     TmpC
+        abx
+        lda     #4
+        sta     ,x+
+        sta     ,x+
+        sta     ,x+
+        puls    x
+        * ship5 row4 len2
+        pshs    x
+        leax    40,x
+        ldb     TmpC
+        abx
+        lda     #5
+        sta     ,x+
+        sta     ,x+
+        puls    x
+        lbsr    Rand            ; vary next auto (enemy)
         rts
 
 * ShipId (1..5) → B = length
