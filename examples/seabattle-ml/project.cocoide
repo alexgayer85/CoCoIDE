@@ -5,9 +5,13 @@
   "dialect": "decb",
   "entry": "src/main.bas",
   "disk_image": "build/work.dsk",
-  "auto_run": true,
+  "auto_run": false,
   "preprocessor": false,
   "standalone": [],
-  "asm_sources": ["src/sea.asm"],
-  "roms": {}
+  "asm_sources": [
+    "src/sea.asm"
+  ],
+  "roms": {},
+  "xroar_ao": "pulse",
+  "xroar_ao_gain": "0"
 }

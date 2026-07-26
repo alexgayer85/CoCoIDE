@@ -301,13 +301,14 @@ pp_bad
         lbsr    Beep
         lbra    pp_in
 pp_auto
-        * Immediate audio so we know P was recognized
-        lda     #2
-        lbsr    Beep
+        * Click DAC first (no Beep routine — proves we reached here)
+        lda     #$20
+        sta     DAC
+        eora    #$3F
+        sta     DAC
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
-        * Redraw left board only (player ships) — skip full dual for speed
         lda     #0
         sta     BoardWhich
         lda     #LX0
@@ -315,9 +316,8 @@ pp_auto
         lda     #LY0
         sta     BY0
         lbsr    DrawOneBoard
-        lda     #1
-        lbsr    Beep
-        * Continue into battle setup without waiting for another key
+        lda     #$20
+        sta     DAC
         rts
 
 pp_done
@@ -1525,63 +1525,43 @@ Font8
         fcb     $FF,$03,$06,$0C,$18,$30,$60,$FF  * Z
 
 ***********************************************************************
-* Keyboard — POLCAT with saved registers (ROM destroys X/B/Y!)
-* Edge: release → press → release. Memory counters so timeout works.
+* Keyboard — minimal POLCAT. Counters in B only (no BSS timer — a
+* failed KTimer write caused infinite release-wait on some keys e.g. P).
 ***********************************************************************
 POLCAT  equ     $A000
 
-* Safe POLCAT: return key in A, preserve B,X,Y,U,DP
-Polcat
-        pshs    b,x,y,u
-        jsr     [POLCAT]
-        puls    b,x,y,u
-        rts
-
 WaitKey
-        andcc   #$EF            ; ensure IRQ enabled (keyboard scan)
-        * --- wait until no key (bounded) ---
-        ldd     #$6000
-        std     KTimer
-wku     lbsr    Polcat
-        tsta
-        beq     wkp
-        ldd     KTimer
-        subd    #1
-        std     KTimer
-        bne     wku
-        * timed out still "down" — fall through
-        * --- wait for key press ---
-wkp     lbsr    Polcat
-        tsta
-        beq     wkp
+        andcc   #$EF            ; IRQs on for keyboard scan
+        * drain any pending (bounded, register counter only)
+        ldb     #40
+wk_dr   jsr     [POLCAT]
+        decb
+        bne     wk_dr
+        * wait for key (A != 0)
+wk_wt   jsr     [POLCAT]
+        anda    #$7F
+        beq     wk_wt
         sta     KChar
-        * --- wait release (bounded) ---
-        ldd     #$6000
-        std     KTimer
-wkr     lbsr    Polcat
-        tsta
-        beq     wkd
-        ldd     KTimer
-        subd    #1
-        std     KTimer
-        bne     wkr
-wkd     lda     KChar
-        cmpa    #'a
-        blo     wku2
-        cmpa    #'z
-        bhi     wku2
-        suba    #32
-        sta     KChar
-wku2    * inter-key gap so one press ≠ many
-        ldd     #$1800
-        std     KTimer
-wkg     ldd     KTimer
-        subd    #1
-        std     KTimer
-        bne     wkg
+        * drain/release (bounded — NEVER infinite)
+        ldb     #80
+wk_up   jsr     [POLCAT]
+        decb
+        bne     wk_up
+        * small settle
+        ldb     #0
+wk_st   decb
+        bne     wk_st
         lda     KChar
-        anda    #$7F            ; strip high bit if any
-        rts
+        anda    #$7F
+        cmpa    #'a
+        blo     wk_done
+        cmpa    #'z
+        bhi     wk_done
+        suba    #32
+wk_done rts
+
+* Stored next to code so it is always in the LOADM image
+KChar   fcb     0
 
 
 * Sound / RNG
@@ -1715,8 +1695,6 @@ TmpB    zmb     1
 RR      zmb     1
 CC      zmb     1
 Rnd     zmb     1
-KTimer  zmb     2
-KChar   zmb     1
 BoardWhich zmb  1
 BX0     zmb     1
 BY0     zmb     1
