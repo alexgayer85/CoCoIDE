@@ -701,9 +701,10 @@ pt_al   leax    TMAlr,pcr
         lbsr    DrawStr
         lda     #0
         lbsr    Beep
-        lbsr    PauseMed
+        lbsr    PauseShort
         lbra    pt_i
-pt_msg  lda     #8
+pt_msg  lbsr    ClearMsg
+        lda     #8
         ldb     #180
         lbsr    DrawStr
         lda     HT
@@ -716,15 +717,15 @@ pt_b0   clra
         bra     pt_bb
 pt_b2   lda     #2
 pt_bb   lbsr    Beep
-        lbsr    PauseMed        ; auto-continue (no WaitKey freeze)
+        lbsr    PauseShort      ; brief pause then computer fires (no key wait)
         rts
 
 ComputerTurn
+        lbsr    ClearMsg
         leax    TMComp,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseShort
         lbsr    AiPick
         lda     AR
         sta     TmpR
@@ -765,27 +766,39 @@ ct_m    clra
 ct_s    clr     Hunt
         lda     #2
 ct_b    lbsr    Beep
-        lbsr    PauseMed
+        lbsr    PauseShort
+        lbsr    ClearMsg
         rts
 
-* Fixed delays (register only — never hang on keyboard)
+* Wipe status line (y=180, 32 chars wide)
+ClearMsg
+        pshs    a,b,x,y
+        lda     #180
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        leax    GFX,x
+        ldb     #32
+        clra
+cm1     sta     ,x+
+        decb
+        bne     cm1
+        puls    a,b,x,y
+        rts
+
+* Short fixed delay only (no keyboard)
 PauseShort
-        pshs    d,x
-        ldx     #$1800
+        pshs    a,b,x
+        ldb     #3
+ps0     ldx     #$0C00
 ps1     leax    -1,x
         bne     ps1
-        puls    d,x
+        decb
+        bne     ps0
+        puls    a,b,x
         rts
 PauseMed
-        pshs    d,x
-        ldb     #6
-pm1     ldx     #$2000
-pm2     leax    -1,x
-        bne     pm2
-        decb
-        bne     pm1
-        puls    d,x
-        rts
+        bra     PauseShort
 
 DrawBattleHUD
         leax    TYou,pcr
@@ -1678,12 +1691,12 @@ TRad    fcn     "RADAR"
 TStat   fcn     ""
 TScE    fcn     "E:"
 TScY    fcn     " Y:"
-TMHit   fcn     "HIT! KEY"
-TMMiss  fcn     "MISS KEY"
-TMSunk  fcn     "SUNK! KEY"
-TMAlr   fcn     "ALREADY KEY"
-TMComp  fcn     "COMPUTER..."
-TMComp2 fcn     "COMP DONE KEY"
+TMHit   fcn     "HIT!"
+TMMiss  fcn     "MISS!"
+TMSunk  fcn     "SUNK!"
+TMAlr   fcn     "ALREADY"
+TMComp  fcn     "COMPUTER"
+TMComp2 fcn     "COMP DONE"
 TWin    fcn     "YOU WIN!"
 TLose   fcn     "YOU LOSE"
 TmpCh   zmb     1
