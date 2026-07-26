@@ -1184,21 +1184,16 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _about(self) -> None:
-        guide = self._user_guide_path()
-        guide_note = (
-            f"<p>User guide: <code>{guide}</code> (Help → User Guide or F1)</p>"
-            if guide
-            else "<p>User guide: docs/user-guide/ in the source tree</p>"
-        )
         QMessageBox.about(
             self,
             "About CoCoIDE",
             f"<h3>CoCoIDE {__version__}</h3>"
-            "<p>Tandy Color Computer IDE — disk-first, Disk Extended BASIC, "
-            "CoCo 3 priority.</p>"
-            "<p>Integrates XRoar, Toolshed <code>decb</code>, and LWTOOLS.</p>"
+            "<p>Tandy Color Computer IDE — Disk Extended BASIC</p>"
+            "<p>Integrates XRoar, Toolshed <code>decb</code>, and LWTOOLS "
+            "(lwasm).</p>"
             f"<p>Tools: {self.tools.status_line()}</p>"
-            f"{guide_note}",
+            "<p>F1 for Help</p>"
+            "<p>(C) Alex Gayer 2026</p>",
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
