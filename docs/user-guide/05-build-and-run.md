@@ -57,7 +57,7 @@ Pipeline:
 
 Exact command is appended to the **XRoar** tab.
 
-Audio defaults: **`-ao pulse -ao-gain 0`** (PipeWire/Pulse, full gain).  
+Audio defaults: **Linux** `-ao pulse -ao-gain 0` (PipeWire/Pulse, full gain); **Windows/macOS** platform default module (gain still `0` unless overridden).  
 See [Troubleshooting — No sound](10-troubleshooting.md#no-sound-in-xroar) if silent.
 
 ### Auto-run

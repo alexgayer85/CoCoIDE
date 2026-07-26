@@ -11,24 +11,32 @@ CoCoIDE is a desktop IDE for **Tandy Color Computer** development:
 - Run it in **XRoar**  
 - Warn about common CoCo footguns  
 
-It is **disk-first**, defaults to **CoCo 3** + **Disk Extended BASIC**, and targets Linux (KDE/GNOME); Windows is planned later.
+It is **disk-first**, defaults to **CoCo 3** + **Disk Extended BASIC**. Linux is the primary platform; Windows portable packages are supported via the same `tools/` layout.
 
 ## What you need
+
+### Portable zip (recommended for end users)
+
+Download a release from GitHub, unzip, run `CoCoIDE`. Bundled tools live in `tools/`. You still need **CoCo ROMs** for XRoar (not shipped).
+
+### From source
 
 | Component | Role | Notes |
 |-----------|------|--------|
 | Python 3.10+ | Runs CoCoIDE | |
 | PySide6 | GUI | Installed via `requirements.txt` / venv |
-| [XRoar](https://www.6809.org.uk/xroar/) | Emulator | On `PATH` as `xroar` |
-| [Toolshed](https://sourceforge.net/projects/toolshed/) `decb` | Disk images | On `PATH` as `decb` |
+| [XRoar](https://www.6809.org.uk/xroar/) | Emulator | On `PATH` as `xroar`, or in `./tools/` |
+| [Toolshed](https://sourceforge.net/projects/toolshed/) `decb` | Disk images | On `PATH` as `decb`, or in `./tools/` |
 | CoCo ROMs | XRoar needs them | You supply legal dumps; CoCoIDE does not ship ROMs |
-| Optional: `lwasm` | Assembler | Detected but not fully wired yet |
+| Optional: `lwasm` | Assembler | On `PATH` or `./tools/` |
 
-Check the status bar after launch: it shows `xroar=OK · decb=OK · lwasm=…`.
+Check the status bar after launch: it shows `xroar=OK · decb=OK · lwasm=…`. **Help → About** shows full paths (bundled vs system).
 
-### Override tool paths
+### How tools are found
 
-If a tool is not on `PATH`:
+1. Env overrides: `COCOIDE_XROAR`, `COCOIDE_DECB`, `COCOIDE_LWASM`
+2. Bundled `tools/` next to the app (portable) or repo root (dev)
+3. System `PATH`
 
 ```bash
 export COCOIDE_XROAR=/path/to/xroar
@@ -38,7 +46,11 @@ export COCOIDE_LWASM=/path/to/lwasm
 
 ## Install and launch
 
-From a source checkout:
+### Portable
+
+Unzip the release and run `./CoCoIDE` (Linux) or `CoCoIDE.exe` (Windows). See `README-PORTABLE.txt` inside the zip.
+
+### From a source checkout
 
 ```bash
 cd CoCoIDE

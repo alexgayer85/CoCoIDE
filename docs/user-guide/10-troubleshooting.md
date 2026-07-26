@@ -6,19 +6,29 @@
 
 Status bar: `xroar=missing` or `decb=missing`.
 
-1. Install XRoar and Toolshed so `xroar` and `decb` work in a terminal.  
-2. Or set:
+1. **Portable build:** ensure `tools/xroar`, `tools/decb` (and optionally `tools/lwasm`) sit next to the CoCoIDE executable and are executable.  
+2. **From source:** install XRoar and Toolshed so `xroar` and `decb` work in a terminal, or put them in the repo’s `tools/` folder.  
+3. Or set:
 
    ```bash
    export COCOIDE_XROAR=/full/path/to/xroar
    export COCOIDE_DECB=/full/path/to/decb
+   export COCOIDE_LWASM=/full/path/to/lwasm
    ```
 
-3. Restart CoCoIDE. Check **Help → About**.
+4. Restart CoCoIDE. Check **Help → About** for the resolved paths.
+
+### Windows notes
+
+- Tool names may be `xroar.exe`, `decb.exe`, `lwasm.exe` under `tools\`.
+- SmartScreen may warn on unsigned portable zips — use “More info → Run anyway” only for builds you trust (e.g. official GitHub Releases).
+- Audio defaults leave XRoar’s native backend (do not force Linux `pulse`).
 
 ## XRoar opens but no BASIC / black screen
 
-XRoar needs **ROM images**. CoCoIDE does not ship copyrighted ROMs.
+XRoar needs **ROM images**. CoCoIDE (and the portable zip) do **not** ship copyrighted ROMs.
+
+ROMs live in **your home directory**, not inside the app folder. If XRoar already worked before installing CoCoIDE, portable builds often “just work” because they reuse:
 
 Typical layout under `~/.xroar/roms/`:
 

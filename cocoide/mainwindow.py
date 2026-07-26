@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStatusBar,
     QTabWidget,
+    QTextBrowser,
     QToolBar,
     QTreeWidget,
     QTreeWidgetItem,
@@ -267,12 +268,16 @@ class MainWindow(QMainWindow):
 
         help_menu = self.menuBar().addMenu("&Help")
         act_guide = QAction("User Guide…", self)
-        act_guide.setShortcut("F1")
+        act_guide.setShortcut(QKeySequence(Qt.Key.Key_F1))
+        act_guide.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         act_guide.triggered.connect(self._open_user_guide)
         help_menu.addAction(act_guide)
+        # Ensure F1 works even when a child widget has focus
+        self.addAction(act_guide)
         act_about = QAction("About CoCoIDE", self)
         act_about.triggered.connect(self._about)
         help_menu.addAction(act_about)
+        self._help_dialog: QDialog | None = None
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
@@ -437,7 +442,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "decb missing",
-                "Toolshed `decb` is required to browse disk images.",
+                "Toolshed `decb` is required to browse disk images.\n\n"
+                "Install Toolshed on PATH, place decb in tools/ next to CoCoIDE, "
+                "or set COCOIDE_DECB.",
             )
             return
         # Prefer not preloading project disk when creating a brand-new project
@@ -823,7 +830,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "XRoar missing",
-                "xroar not found on PATH.\nInstall XRoar or set COCOIDE_XROAR.",
+                "xroar not found.\n\n"
+                "Install XRoar on PATH, place it in a tools/ folder next to "
+                "CoCoIDE (portable builds), or set COCOIDE_XROAR to the binary.",
             )
             return
         report = run_project(self.tools, self.project)
@@ -954,7 +963,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "decb missing",
-                "Toolshed `decb` not found on PATH.\nInstall Toolshed or set COCOIDE_DECB.",
+                "Toolshed `decb` not found.\n\n"
+                "Install Toolshed on PATH, place decb in tools/ next to CoCoIDE, "
+                "or set COCOIDE_DECB.",
             )
             return False
         return True
@@ -1169,28 +1180,155 @@ class MainWindow(QMainWindow):
         for m in messages:
             self.build_log.appendPlainText(m)
 
-    def _user_guide_path(self) -> Path | None:
-        """Locate docs/user-guide/README.md relative to package or cwd."""
-        candidates = [
-            Path(__file__).resolve().parent.parent / "docs" / "user-guide" / "README.md",
-            Path.cwd() / "docs" / "user-guide" / "README.md",
-        ]
-        for p in candidates:
-            if p.is_file():
-                return p
+    def _user_guide_dir(self) -> Path | None:
+        """Directory containing the user guide markdown pages."""
+        import sys
+
+        candidates: list[Path] = []
+        # Portable / PyInstaller: docs/ next to the executable
+        candidates.append(
+            Path(sys.executable).resolve().parent / "docs" / "user-guide"
+        )
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "docs" / "user-guide")
+        # Source tree: cocoide/mainwindow.py → repo root
+        candidates.append(
+            Path(__file__).resolve().parent.parent / "docs" / "user-guide"
+        )
+        # PyInstaller onedir often puts the package under _internal/cocoide/
+        # so parent.parent is _internal — also try one level up from that.
+        pkg = Path(__file__).resolve().parent
+        candidates.append(pkg.parent.parent / "docs" / "user-guide")
+        candidates.append(pkg.parent / "docs" / "user-guide")
+        candidates.append(Path.cwd() / "docs" / "user-guide")
+        for d in candidates:
+            if (d / "README.md").is_file():
+                return d
         return None
 
+    def _user_guide_path(self) -> Path | None:
+        d = self._user_guide_dir()
+        if d is None:
+            return None
+        return d / "README.md"
+
     def _open_user_guide(self) -> None:
-        path = self._user_guide_path()
-        if not path:
+        """Show the user guide in an in-app browser (always works offline)."""
+        guide_dir = self._user_guide_dir()
+        if guide_dir is None:
             QMessageBox.information(
                 self,
                 "User Guide",
-                "User guide not found.\n"
-                "Expected docs/user-guide/README.md in the CoCoIDE checkout.",
+                "User guide not found.\n\n"
+                "Expected docs/user-guide/README.md next to CoCoIDE "
+                "(portable zip) or in the source checkout.",
             )
             return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+        if self._help_dialog is not None and self._help_dialog.isVisible():
+            self._help_dialog.raise_()
+            self._help_dialog.activateWindow()
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("CoCoIDE User Guide")
+        dlg.resize(780, 560)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+
+        layout = QVBoxLayout(dlg)
+        toolbar = QHBoxLayout()
+        btn_home = QPushButton("Home")
+        btn_back = QPushButton("Back")
+        btn_open_ext = QPushButton("Open folder…")
+        path_label = QLabel()
+        path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        toolbar.addWidget(btn_home)
+        toolbar.addWidget(btn_back)
+        toolbar.addWidget(btn_open_ext)
+        toolbar.addWidget(path_label, stretch=1)
+        layout.addLayout(toolbar)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(False)
+        browser.setOpenLinks(False)
+        layout.addWidget(browser, stretch=1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dlg.reject)
+        buttons.accepted.connect(dlg.accept)
+        close_btn = buttons.button(QDialogButtonBox.StandardButton.Close)
+        if close_btn is not None:
+            close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(buttons)
+
+        history: list[Path] = []
+
+        def show_page(path: Path, *, push_history: bool = True) -> None:
+            path = path.resolve()
+            if not path.is_file():
+                browser.setPlainText(f"Page not found:\n{path}")
+                path_label.setText(str(path))
+                return
+            if push_history and (not history or history[-1] != path):
+                history.append(path)
+            text = path.read_text(encoding="utf-8", errors="replace")
+            # Qt renders CommonMark-ish markdown; relative links stay as hrefs.
+            browser.setMarkdown(text)
+            browser.setSearchPaths([str(path.parent)])
+            path_label.setText(str(path.name))
+            dlg.setWindowTitle(f"CoCoIDE User Guide — {path.name}")
+
+        def on_anchor(url: QUrl) -> None:
+            if url.isRelative() or url.scheme() in ("", "file"):
+                local = url.toLocalFile() if url.isLocalFile() else url.path()
+                # QUrl relative: path may be "01-getting-started.md"
+                rel = local or url.toString()
+                if rel.startswith("file:"):
+                    target = Path(QUrl(rel).toLocalFile())
+                else:
+                    base = history[-1].parent if history else guide_dir
+                    target = (base / rel).resolve()
+                # Only navigate within the guide tree (and immediate parents for
+                # linked reference docs that may or may not be shipped).
+                if target.suffix.lower() in {".md", ".markdown", ".txt", ".html"}:
+                    if target.is_file():
+                        show_page(target)
+                        return
+                    browser.setPlainText(
+                        f"Linked page not found:\n{target}\n\n"
+                        f"(Guide root: {guide_dir})"
+                    )
+                    return
+            # External / unknown — try desktop handler
+            QDesktopServices.openUrl(url)
+
+        def go_home() -> None:
+            history.clear()
+            show_page(guide_dir / "README.md")
+
+        def go_back() -> None:
+            if len(history) > 1:
+                history.pop()
+                show_page(history[-1], push_history=False)
+
+        def open_folder() -> None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(guide_dir)))
+
+        browser.anchorClicked.connect(on_anchor)
+        btn_home.clicked.connect(go_home)
+        btn_back.clicked.connect(go_back)
+        btn_open_ext.clicked.connect(open_folder)
+
+        def on_finished() -> None:
+            self._help_dialog = None
+
+        dlg.finished.connect(on_finished)
+        self._help_dialog = dlg
+        show_page(guide_dir / "README.md")
+        dlg.show()
 
     def _about_mascot_path(self) -> Path | None:
         """Bundled mascot, then ~/coco.jpg."""
@@ -1213,12 +1351,18 @@ class MainWindow(QMainWindow):
 
         text_col = QVBoxLayout()
         text_col.setSpacing(8)
+        self.tools.resolve()
+        paths_html = "<br/>".join(
+            f"<code>{name}={getattr(self.tools, name) or 'missing'}</code>"
+            for name in ("xroar", "decb", "lwasm")
+        )
         body = QLabel(
             f"<h2 style='margin:0 0 8px 0;'>CoCoIDE {__version__}</h2>"
             "<p style='margin:4px 0;'>Tandy Color Computer IDE — Disk Extended BASIC</p>"
             "<p style='margin:4px 0;'>Integrates XRoar, Toolshed <code>decb</code>, "
             "and LWTOOLS (lwasm).</p>"
             f"<p style='margin:4px 0;'>Tools: {self.tools.status_line()}</p>"
+            f"<p style='margin:4px 0; font-size: small;'>{paths_html}</p>"
             "<p style='margin:4px 0;'>F1 for Help</p>"
             "<p style='margin:12px 0 0 0;'>(C) Alex Gayer 2026</p>"
         )

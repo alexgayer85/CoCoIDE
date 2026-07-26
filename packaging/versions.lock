@@ -1,0 +1,8 @@
+# Pinned tool versions for portable packages (v0.1.0 target)
+# Format: name=version  # notes
+
+xroar=1.11
+toolshed=2.4.2
+lwtools=4.24
+# Prefer 4.25 for Windows official win64 zip when packaging on Windows
+# lwtools_windows=4.25

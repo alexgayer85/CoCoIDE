@@ -25,8 +25,8 @@ class Project:
     standalone: list[str] = field(default_factory=list)
     asm_sources: list[str] = field(default_factory=list)  # optional explicit list; else auto src/**/*.asm
     roms: dict[str, str] = field(default_factory=dict)
-    # XRoar audio (optional; defaults = pulse + 0 dB gain)
-    xroar_ao: str = "pulse"  # pulse | alsa | oss | null
+    # XRoar audio (optional; empty ao = platform default, e.g. pulse on Linux)
+    xroar_ao: str = ""  # pulse | alsa | oss | null | "" (auto)
     xroar_ao_gain: str = "0"  # dB relative to 0 dBFS (XRoar default is often -3)
     root: Path | None = field(default=None, repr=False)
 

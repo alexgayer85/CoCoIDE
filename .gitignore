@@ -6,6 +6,16 @@ dist/
 build/
 .pytest_cache/
 *.log
+# Generated PyInstaller specs under build/ (keep packaging/cocoide.spec)
+
+# Vendored third-party binaries (release assets only; not git)
+vendor/
+tools/xroar
+tools/decb
+tools/lwasm
+tools/os9
+tools/*.exe
+tools/VERSIONS.txt
 
 # Generated CoCo build artifacts (sources live under src/)
 **/build/*.dsk

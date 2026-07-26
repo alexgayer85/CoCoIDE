@@ -6,11 +6,83 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
 TOOL_NAMES = ("xroar", "decb", "lwasm", "os9")
+
+
+def _is_runnable(path: Path) -> bool:
+    """True if path is a usable executable (Unix X_OK; Windows: file exists)."""
+    if not path.is_file():
+        return False
+    if os.name == "nt":
+        return True
+    return os.access(path, os.X_OK)
+
+
+def _tool_filenames(name: str) -> list[str]:
+    """Candidate basenames for a tool on this platform."""
+    if os.name == "nt":
+        return [f"{name}.exe", name]
+    return [name]
+
+
+def _bundle_tools_dir() -> Path | None:
+    """Directory containing bundled tools/, if present.
+
+    Search order:
+    1. Next to frozen executable (PyInstaller onedir portable layout)
+    2. PyInstaller _MEIPASS/tools (onefile extract dir)
+    3. Repo root tools/ (developer checkout: CoCoIDE/tools/)
+    4. Next to sys.executable (venv / portable without frozen flag)
+    """
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).resolve().parent / "tools")
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "tools")
+    # Dev checkout: cocoide/tools.py → parent.parent = repo root
+    candidates.append(Path(__file__).resolve().parent.parent / "tools")
+    candidates.append(Path(sys.executable).resolve().parent / "tools")
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return None
+
+
+def _find_bundled_tool(name: str) -> str | None:
+    tools_dir = _bundle_tools_dir()
+    if tools_dir is None:
+        return None
+    for fname in _tool_filenames(name):
+        candidate = tools_dir / fname
+        if _is_runnable(candidate):
+            return str(candidate.resolve())
+    return None
+
+
+def default_xroar_ao() -> str:
+    """Platform default for XRoar ``-ao`` module (empty = let XRoar choose)."""
+    env = os.environ.get("COCOIDE_XROAR_AO")
+    if env is not None:
+        return env.strip()
+    if sys.platform.startswith("linux"):
+        return "pulse"
+    if sys.platform == "darwin":
+        return "coreaudio"
+    # Windows and others: omit -ao so XRoar picks its native backend
+    return ""
+
+
+def default_xroar_ao_gain() -> str:
+    env = os.environ.get("COCOIDE_XROAR_AO_GAIN")
+    if env is not None and env.strip():
+        return env.strip()
+    return "0"
 
 
 @dataclass
@@ -22,14 +94,24 @@ class ToolPaths:
     overrides: dict[str, str] = field(default_factory=dict)
 
     def resolve(self) -> ToolPaths:
+        """Resolve tools: env override → bundled tools/ → PATH."""
         for name in TOOL_NAMES:
             override = self.overrides.get(name) or os.environ.get(
                 f"COCOIDE_{name.upper()}"
             )
-            if override and Path(override).is_file() and os.access(override, os.X_OK):
-                setattr(self, name, override)
-            else:
-                setattr(self, name, shutil.which(name))
+            if override and _is_runnable(Path(override)):
+                setattr(self, name, str(Path(override).resolve()))
+                continue
+            bundled = _find_bundled_tool(name)
+            if bundled:
+                setattr(self, name, bundled)
+                continue
+            found = None
+            for fname in _tool_filenames(name):
+                found = shutil.which(fname)
+                if found:
+                    break
+            setattr(self, name, found)
         return self
 
     def status_line(self) -> str:
@@ -37,6 +119,14 @@ class ToolPaths:
         for name in ("xroar", "decb", "lwasm"):
             path = getattr(self, name)
             parts.append(f"{name}={'OK' if path else 'missing'}")
+        return " · ".join(parts)
+
+    def paths_line(self) -> str:
+        """Human-readable resolved paths for About / diagnostics."""
+        parts = []
+        for name in ("xroar", "decb", "lwasm"):
+            path = getattr(self, name)
+            parts.append(f"{name}={path or 'missing'}")
         return " · ".join(parts)
 
     def all_required_ok(self) -> bool:
@@ -429,15 +519,19 @@ def entry_disk_name(entry: str) -> str:
 
 
 def default_xroar_audio_args() -> list[str]:
-    """Sensible Linux audio defaults for XRoar (Pulse/PipeWire + full gain).
+    """Platform-aware XRoar audio flags.
 
-    XRoar defaults to about -3 dBFS gain, which can sound silent next to desktop
-    audio. Prefer PulseAudio module (works with PipeWire's pulse layer).
+    Linux: Pulse/PipeWire + 0 dB gain (XRoar's own default is often -3 dBFS).
+    Windows/macOS: gain only when no preferred module, or native module.
     Override with env COCOIDE_XROAR_AO / COCOIDE_XROAR_AO_GAIN or project fields.
     """
-    ao = os.environ.get("COCOIDE_XROAR_AO", "pulse").strip() or "pulse"
-    gain = os.environ.get("COCOIDE_XROAR_AO_GAIN", "0").strip() or "0"
-    args = ["-ao", ao, "-ao-gain", gain]
+    ao = default_xroar_ao()
+    gain = default_xroar_ao_gain()
+    args: list[str] = []
+    if ao:
+        args.extend(["-ao", ao])
+    if gain:
+        args.extend(["-ao-gain", gain])
     # Optional: COCOIDE_XROAR_ARGS='-ao-volume 100 -ao-rate 48000'
     extra = os.environ.get("COCOIDE_XROAR_ARGS", "").strip()
     if extra:
@@ -479,16 +573,22 @@ def build_xroar_command(
             cmd.extend(["-ram-org", org])
 
     if audio:
-        if ao or ao_gain:
-            cmd.extend(["-ao", ao or os.environ.get("COCOIDE_XROAR_AO", "pulse")])
-            cmd.extend(
-                ["-ao-gain", ao_gain or os.environ.get("COCOIDE_XROAR_AO_GAIN", "0")]
-            )
-            extra_env = os.environ.get("COCOIDE_XROAR_ARGS", "").strip()
-            if extra_env:
-                cmd.extend(extra_env.split())
+        # None / empty ao → platform default (may omit -ao entirely on Windows).
+        if ao is None or not str(ao).strip():
+            use_ao = default_xroar_ao()
         else:
-            cmd.extend(default_xroar_audio_args())
+            use_ao = str(ao).strip()
+        if ao_gain is None or not str(ao_gain).strip():
+            use_gain = default_xroar_ao_gain()
+        else:
+            use_gain = str(ao_gain).strip()
+        if use_ao:
+            cmd.extend(["-ao", use_ao])
+        if use_gain:
+            cmd.extend(["-ao-gain", use_gain])
+        extra_env = os.environ.get("COCOIDE_XROAR_ARGS", "").strip()
+        if extra_env:
+            cmd.extend(extra_env.split())
 
     # Mount floppy 0; keep project disk clean from emulator writes.
     cmd.extend(["-load-fd0", str(disk), "-no-disk-write-back"])

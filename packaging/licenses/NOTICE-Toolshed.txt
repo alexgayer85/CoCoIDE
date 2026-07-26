@@ -1,0 +1,6 @@
+ToolShed (decb and related utilities)
+
+Upstream: https://github.com/nitros9project/toolshed
+License: Public Domain (as stated by the ToolShed project on SourceForge /
+GitHub). Redistributed with CoCoIDE portable packages for DECB disk image
+support.

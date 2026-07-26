@@ -309,8 +309,8 @@ def run_project(tools: ToolPaths, project: Project) -> BuildReport:
         disk=report.disk_path,
         auto_run=project.auto_run,
         entry_name=entry_disk_name(project.entry),
-        ao=getattr(project, "xroar_ao", None) or "pulse",
-        ao_gain=getattr(project, "xroar_ao_gain", None) or "0",
+        ao=getattr(project, "xroar_ao", None),
+        ao_gain=getattr(project, "xroar_ao_gain", None),
     )
     report.xroar_cmd = cmd
     report.messages.append("XRoar: " + " ".join(cmd))

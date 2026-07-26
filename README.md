@@ -1,10 +1,24 @@
 # CoCoIDE
 
-Open-source **Tandy Color Computer** IDE for Linux (KDE/GNOME) with a path to Windows later.
+Open-source **Tandy Color Computer** IDE — disk-first DECB workflow, modern BASIC, XRoar, Toolshed, and LWTOOLS.
+
+## Downloads
+
+**→ [GitHub Releases](https://github.com/alexgayer85/CoCoIDE/releases)** for portable builds.
+
+| Package | Contents |
+|---------|----------|
+| **Linux x86_64 portable** | App + `tools/{xroar,decb,lwasm}` + examples |
+| **Windows x86_64 portable** | Same layout (when published) |
+| **Source** | This repository (`pip` / `./run.sh`) |
+
+**CoCo ROM images are not included** (copyright). Configure legal dumps for XRoar before Run (see [Troubleshooting](docs/user-guide/10-troubleshooting.md)).
+
+Portable packages redistribute XRoar under **GPL-3+** and other FOSS tools; see `packaging/THIRD_PARTY.md`.
 
 ## User documentation
 
-**→ [User Guide](docs/user-guide/README.md)** — how to install, write modern BASIC, build disks, run XRoar, use the disk panel, and read diagnostics.
+**→ [User Guide](docs/user-guide/README.md)** — install, modern BASIC, build disks, run XRoar, disk panel, diagnostics.
 
 | Quick links | |
 |-------------|--|
@@ -12,7 +26,7 @@ Open-source **Tandy Color Computer** IDE for Linux (KDE/GNOME) with a path to Wi
 | [Modern BASIC](docs/user-guide/04-modern-basic.md) | `.mbas`, includes, standalone |
 | [Build and Run](docs/user-guide/05-build-and-run.md) | Disk + XRoar |
 | [Troubleshooting](docs/user-guide/10-troubleshooting.md) | Common issues |
-| [Documentation map](docs/DOCUMENTATION.md) | All docs + how we keep them updated |
+| [Documentation map](docs/DOCUMENTATION.md) | All docs |
 
 ## Product focus
 
@@ -36,15 +50,25 @@ Open-source **Tandy Color Computer** IDE for Linux (KDE/GNOME) with a path to Wi
 - Disk panel: New / Add / Extract / Delete + free-granule bar
 - **Browse any `.dsk`**: import (detokenize BASIC), use as project disk, **New Project from Disk**
 - **6809 ASM** via `lwasm` → DECB `.BIN` on disk; **best-effort disassembly** of imported BINs
+- Portable layout: prefers `tools/` next to the app, then `PATH` / `COCOIDE_*` env overrides
 
 ## Requirements
 
+### Portable zip
+
+- Linux (glibc ≈ Ubuntu 22.04+) or Windows 10+
+- CoCo ROMs for XRoar (you supply)
+- Bundled tools — no separate install of xroar/decb/lwasm
+
+### From source
+
 - Python 3.10+
 - PySide6
-- `xroar`, `decb` on `PATH` (and CoCo ROMs for XRoar)
+- `xroar`, `decb` on `PATH` (or under `./tools/`)
 - Optional: `lwasm`
+- CoCo ROMs for XRoar
 
-## Quick start
+## Quick start (source)
 
 ```bash
 cd CoCoIDE
@@ -60,7 +84,27 @@ pip install -r requirements.txt
 PYTHONPATH=. python -m cocoide.app
 ```
 
-Full setup notes: [Getting started](docs/user-guide/01-getting-started.md).
+Full setup: [Getting started](docs/user-guide/01-getting-started.md).
+
+### Override tool paths
+
+```bash
+export COCOIDE_XROAR=/path/to/xroar
+export COCOIDE_DECB=/path/to/decb
+export COCOIDE_LWASM=/path/to/lwasm
+```
+
+## Building portable packages
+
+```bash
+# Linux (uses tools on PATH → vendor/linux/tools)
+./scripts/fetch_tools_linux.sh
+./scripts/package_linux.sh
+# → dist/CoCoIDE-*-linux-x86_64.zip
+```
+
+Windows (on a Windows host): stage `vendor/windows/tools/*.exe`, then run
+`scripts/package_windows.ps1`. Details: `packaging/THIRD_PARTY.md`.
 
 ## Project layout
 
@@ -75,4 +119,4 @@ mygame/
 
 ## License
 
-MIT (see [LICENSE](LICENSE)).
+MIT (see [LICENSE](LICENSE)). Bundled third-party tools: [packaging/THIRD_PARTY.md](packaging/THIRD_PARTY.md).

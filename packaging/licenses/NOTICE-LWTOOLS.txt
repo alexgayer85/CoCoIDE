@@ -1,0 +1,9 @@
+LWTOOLS (lwasm and related utilities)
+
+Upstream: https://www.lwtools.ca/
+Author: William Astle and contributors
+
+Redistributed with CoCoIDE portable packages for 6809 assembly support.
+See the COPYING file in the LWTOOLS source distribution for full license
+terms. Official source and Windows binaries are available from the upstream
+site.
