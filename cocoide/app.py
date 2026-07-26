@@ -11,8 +11,21 @@ from cocoide.mainwindow import MainWindow
 from cocoide.project import PROJECT_FILENAME, Project
 
 
+def _package_dir() -> Path:
+    """Directory containing style.qss / assets (source or PyInstaller)."""
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            # --add-data cocoide/* → <MEIPASS>/cocoide/
+            bundled = Path(meipass) / "cocoide"
+            if bundled.is_dir():
+                return bundled
+            return Path(meipass)
+    return Path(__file__).resolve().parent
+
+
 def _load_stylesheet() -> str:
-    qss = Path(__file__).with_name("style.qss")
+    qss = _package_dir() / "style.qss"
     if qss.is_file():
         return qss.read_text(encoding="utf-8")
     return ""

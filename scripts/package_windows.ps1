@@ -1,7 +1,14 @@
-# Build a Windows x86_64 portable zip (run on Windows with Python 3.10+).
+# Build a Windows x86_64 PyInstaller onedir portable zip.
+# Run on Windows (or GitHub Actions windows-latest).
+#
 # Prerequisites:
-#   - vendor\windows\tools\{xroar,decb,lwasm}.exe  (see scripts/fetch_tools_windows.sh)
-#   - pip install -r requirements.txt pyinstaller
+#   - Python 3.10+ on PATH as `python`
+#   - vendor\windows\tools\{xroar,decb,lwasm}.exe
+#     (scripts\fetch_tools_windows.ps1 or scripts\fetch_tools_windows.sh)
+#
+# Output:
+#   dist\CoCoIDE-<ver>-windows-x86_64\CoCoIDE.exe
+#   dist\CoCoIDE-<ver>-windows-x86_64.zip
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -17,30 +24,55 @@ if ($pyproject -match 'version\s*=\s*"([^"]+)"') {
 $Name = "CoCoIDE-$Ver-windows-x86_64"
 $Stage = Join-Path $Root "dist\$Name"
 $ToolsSrc = Join-Path $Root "vendor\windows\tools"
+$PyDist = Join-Path $Root "dist\CoCoIDE"
 
 foreach ($t in @("xroar.exe", "decb.exe", "lwasm.exe")) {
     $p = Join-Path $ToolsSrc $t
     if (-not (Test-Path $p)) {
-        throw "Missing $p — stage Windows tools first (see packaging/THIRD_PARTY.md)"
+        Write-Host "Tools missing; running fetch_tools_windows.ps1 …"
+        & (Join-Path $Root "scripts\fetch_tools_windows.ps1")
+        break
+    }
+}
+foreach ($t in @("xroar.exe", "decb.exe", "lwasm.exe")) {
+    $p = Join-Path $ToolsSrc $t
+    if (-not (Test-Path $p)) {
+        throw "Missing $p — stage Windows tools first"
     }
 }
 
+Write-Host "==> pip install"
+python -m pip install -U pip
 python -m pip install -q -r requirements.txt pyinstaller
 
-$DistCoCo = Join-Path $Root "dist\CoCoIDE"
-if (Test-Path $DistCoCo) { Remove-Item -Recurse -Force $DistCoCo }
+if (Test-Path $PyDist) { Remove-Item -Recurse -Force $PyDist }
 if (Test-Path $Stage) { Remove-Item -Recurse -Force $Stage }
+$work = Join-Path $Root "build\pyinstaller"
+if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 
-# Avoid --collect-all PySide6 (WebEngine/3D bloat). Widgets + Gui suffice.
+Write-Host "==> PyInstaller onedir (windowed)"
+# Do not --collect-all PySide6 (WebEngine bloat).
 python -m PyInstaller --noconfirm --clean `
   --name CoCoIDE `
   --onedir `
   --windowed `
   --distpath (Join-Path $Root "dist") `
-  --workpath (Join-Path $Root "build\pyinstaller") `
-  --specpath (Join-Path $Root "build\pyinstaller") `
+  --workpath $work `
+  --specpath $work `
   --paths $Root `
   --hidden-import cocoide `
+  --hidden-import cocoide.app `
+  --hidden-import cocoide.mainwindow `
+  --hidden-import cocoide.tools `
+  --hidden-import cocoide.build `
+  --hidden-import cocoide.project `
+  --hidden-import cocoide.dialogs `
+  --hidden-import cocoide.diagnostics `
+  --hidden-import cocoide.asm `
+  --hidden-import cocoide.preprocessor `
+  --hidden-import cocoide.disk_browser `
+  --hidden-import cocoide.disk_import `
+  --hidden-import cocoide.disasm6809 `
   --hidden-import PySide6.QtCore `
   --hidden-import PySide6.QtGui `
   --hidden-import PySide6.QtWidgets `
@@ -48,24 +80,57 @@ python -m PyInstaller --noconfirm --clean `
   --exclude-module PySide6.QtWebEngine `
   --exclude-module PySide6.QtWebEngineCore `
   --exclude-module PySide6.QtWebEngineWidgets `
+  --exclude-module PySide6.Qt3DCore `
+  --exclude-module PySide6.QtBluetooth `
+  --exclude-module PySide6.QtMultimedia `
   --add-data "cocoide\style.qss;cocoide" `
   --add-data "cocoide\assets;cocoide\assets" `
-  "cocoide\app.py"
+  "packaging\win_entry.py"
 
-New-Item -ItemType Directory -Force -Path (Join-Path $Stage "tools") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $Stage "licenses") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $Stage "examples") | Out-Null
+if (-not (Test-Path (Join-Path $PyDist "CoCoIDE.exe"))) {
+    throw "PyInstaller did not produce dist\CoCoIDE\CoCoIDE.exe"
+}
 
-Copy-Item -Recurse -Force (Join-Path $DistCoCo "*") $Stage
-Copy-Item -Force (Join-Path $ToolsSrc "*.exe") (Join-Path $Stage "tools")
+Write-Host "==> Assemble portable stage"
+New-Item -ItemType Directory -Force -Path `
+    (Join-Path $Stage "tools"), `
+    (Join-Path $Stage "licenses"), `
+    (Join-Path $Stage "examples"), `
+    (Join-Path $Stage "docs") | Out-Null
+
+Copy-Item -Recurse -Force (Join-Path $PyDist "*") $Stage
+Copy-Item -Force (Join-Path $ToolsSrc "xroar.exe") (Join-Path $Stage "tools")
+Copy-Item -Force (Join-Path $ToolsSrc "decb.exe") (Join-Path $Stage "tools")
+Copy-Item -Force (Join-Path $ToolsSrc "lwasm.exe") (Join-Path $Stage "tools")
 if (Test-Path (Join-Path $ToolsSrc "VERSIONS.txt")) {
     Copy-Item -Force (Join-Path $ToolsSrc "VERSIONS.txt") (Join-Path $Stage "tools")
 }
 
 Copy-Item -Force "LICENSE" (Join-Path $Stage "licenses\LICENSE-CoCoIDE.txt")
-Copy-Item -Force "packaging\licenses\*" (Join-Path $Stage "licenses")
-Copy-Item -Force "packaging\THIRD_PARTY.md" $Stage
-Copy-Item -Force "packaging\README-PORTABLE.txt" $Stage
+Copy-Item -Force (Join-Path $Root "packaging\licenses\*") (Join-Path $Stage "licenses")
+Copy-Item -Force (Join-Path $Root "packaging\THIRD_PARTY.md") $Stage
+Copy-Item -Force (Join-Path $Root "packaging\README-PORTABLE.txt") $Stage
+
+@"
+CoCoIDE $Ver — Windows (PyInstaller)
+====================================
+
+1. Unzip this folder anywhere.
+2. Double-click CoCoIDE.exe
+3. Help / F1 for the user guide.
+4. Open examples\hello or create a new project.
+
+Bundled tools are in tools\ (xroar.exe, decb.exe, lwasm.exe).
+
+ROMs are NOT included. Place legal dumps in:
+  %USERPROFILE%\.xroar\roms\
+(e.g. coco3.rom, disk11.rom)
+
+If SmartScreen warns, use More info → Run anyway only for official
+GitHub Releases builds.
+
+See THIRD_PARTY.md (XRoar is GPL-3+).
+"@ | Set-Content -Path (Join-Path $Stage "README-WINDOWS.txt") -Encoding UTF8
 
 $guideSrc = Join-Path $Root "docs\user-guide"
 if (Test-Path $guideSrc) {
@@ -78,26 +143,27 @@ foreach ($ex in @("hello", "seabattle-ml")) {
     $src = Join-Path $Root "examples\$ex"
     if (Test-Path $src) {
         $dest = Join-Path $Stage "examples\$ex"
-        New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Get-ChildItem $src -Recurse | Where-Object {
-            $_.FullName -notmatch '\\build\\' -and $_.FullName -notmatch '__pycache__'
-        } | ForEach-Object {
-            $rel = $_.FullName.Substring($src.Length).TrimStart('\')
-            $target = Join-Path $dest $rel
-            if ($_.PSIsContainer) {
-                New-Item -ItemType Directory -Force -Path $target | Out-Null
-            } else {
-                $parent = Split-Path $target -Parent
-                if (-not (Test-Path $parent)) {
-                    New-Item -ItemType Directory -Force -Path $parent | Out-Null
-                }
-                Copy-Item $_.FullName $target -Force
-            }
-        }
+        robocopy $src $dest /E /XD build __pycache__ /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "robocopy failed for $ex code $LASTEXITCODE" }
     }
+}
+
+# Refuse ROMs in the stage
+$roms = Get-ChildItem -Path $Stage -Recurse -Filter *.rom -ErrorAction SilentlyContinue
+if ($roms) {
+    throw "ROM files found in stage — aborting: $($roms.FullName -join ', ')"
 }
 
 $zipPath = Join-Path $Root "dist\$Name.zip"
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
-Compress-Archive -Path $Stage -DestinationPath $zipPath
+# Compress-Archive can struggle with very long paths; prefer tar if available
+if (Get-Command tar -ErrorAction SilentlyContinue) {
+    Push-Location (Join-Path $Root "dist")
+    tar -a -cf "$Name.zip" $Name
+    Pop-Location
+} else {
+    Compress-Archive -Path $Stage -DestinationPath $zipPath -CompressionLevel Optimal
+}
+
 Write-Host "Built $zipPath"
+Get-Item $zipPath | Format-List FullName, Length

@@ -1333,9 +1333,15 @@ class MainWindow(QMainWindow):
 
     def _about_mascot_path(self) -> Path | None:
         """Bundled mascot, then ~/coco.jpg."""
-        bundled = Path(__file__).resolve().parent / "assets" / "coco.jpg"
+        from cocoide.app import _package_dir
+
+        bundled = _package_dir() / "assets" / "coco.jpg"
         if bundled.is_file():
             return bundled
+        # Source / non-frozen fallback
+        src = Path(__file__).resolve().parent / "assets" / "coco.jpg"
+        if src.is_file():
+            return src
         home = Path.home() / "coco.jpg"
         if home.is_file():
             return home

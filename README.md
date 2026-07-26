@@ -102,14 +102,18 @@ export COCOIDE_LWASM=/path/to/lwasm
 ./scripts/package_linux.sh
 # → dist/CoCoIDE-*-linux-x86_64.zip
 
-# Windows portable (built from Linux: embeddable CPython + official/MinGW tools)
+# Windows portable (embeddable CPython — build from Linux without a Windows host)
 ./scripts/fetch_tools_windows.sh      # needs mingw-w64 for decb.exe
 ./scripts/package_windows_from_linux.sh
-# → dist/CoCoIDE-*-windows-x86_64.zip
+# → dist/CoCoIDE-*-windows-x86_64.zip (CoCoIDE.vbs / .bat)
+
+# Windows portable — full PyInstaller freeze (run on Windows or GitHub Actions)
+#   scripts/fetch_tools_windows.ps1
+#   scripts/package_windows.ps1
+# → dist/CoCoIDE-*-windows-x86_64.zip with CoCoIDE.exe
+# CI: Actions workflow "Windows PyInstaller" (workflow_dispatch or tag v*)
 ```
 
-Optional native Windows freeze (PyInstaller on a Windows host): stage
-`vendor/windows/tools/*.exe`, then run `scripts/package_windows.ps1`.
 Details: `packaging/THIRD_PARTY.md`.
 
 ## Project layout
