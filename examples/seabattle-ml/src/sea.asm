@@ -846,6 +846,8 @@ pt_fire
 pt_ms   leax    TMMiss,pcr
         lbra    pt_msg
 pt_sk   lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
         lbsr    PauseLong
         rts
 pt_al   leax    TMAlr,pcr
@@ -853,8 +855,10 @@ pt_al   leax    TMAlr,pcr
         lbsr    PauseMed
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS! — wipe full status band; NO sound (Tone freezes)
+        * X → HIT!/MISS!
         lbsr    ShowMsg
+        lda     HT              ; 0=miss 1=hit (3 handled in pt_sk)
+        lbsr    Tone
         lbsr    PauseMed
         rts
 
@@ -905,12 +909,18 @@ ct_ac
         sta     HC
         leax    TMHit,pcr
         lbsr    ShowMsg
+        lda     #1
+        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMMiss,pcr
         lbsr    ShowMsg
+        clra
+        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
         lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
 ct_end  lbsr    PauseMed
         lbsr    ClearMsg
         rts
@@ -1257,25 +1267,41 @@ ait_bad orcc    #$01
         rts
 
 ***********************************************************************
-* Game over — draw first, short fanfare, linger, then wait for key.
-* (Old path called Beep before draw and could appear frozen on win.)
+* Game over — message ABOVE the grids (not over cells at y=80).
+* Boards stay visible; banner uses y=2..16, hint uses status line y=180.
 ***********************************************************************
 GameOver
         lbsr    DrawBattle
+        lbsr    ClearTopBanner  ; wipe y=0..19 so text is clean
         lda     EH
         bne     gol
         leax    TWin,pcr
         bra     gow
 gol     leax    TLose,pcr
-gow     lda     #72
-        ldb     #80
+gow     lda     #80             ; centered-ish above both boards
+        ldb     #4
         lbsr    DrawStr
         leax    TGo,pcr
-        lda     #40
-        ldb     #112
-        lbsr    DrawStr
+        lbsr    ShowMsg         ; status band under scores, not on grid
         lbsr    PauseLong
         lbsr    WaitKey
+        rts
+
+* Clear scanlines 0..19 (above LY0=24 boards)
+ClearTopBanner
+        pshs    a,b,x
+        ldx     #GFX
+        ldb     #20             ; 20 rows
+ctb_r   pshs    b
+        ldb     #32
+        clra
+ctb_c   sta     ,x+
+        decb
+        bne     ctb_c
+        puls    b
+        decb
+        bne     ctb_r
+        puls    a,b,x
         rts
 
 ***********************************************************************
@@ -1870,17 +1896,94 @@ KChar   fcb     0
 
 
 * Sound / RNG
-* Sound is intentionally a no-op. Every live DAC/PIA Tone path has frozen
-* combat (after hit or miss) on XRoar in this hybrid PMODE4 game. Do not
-* reintroduce lbsr Tone/Beep/Click until proven outside the game loop.
+*
+* Why earlier tones "froze" the game:
+*   Hello beep.asm writes $FF01/$FF03 (PIA0) to enable the TV sound mux.
+*   PIA0 is ALSO the keyboard matrix. Leaving $FF03=$3C permanently broke
+*   POLCAT → WaitKey never saw keys → looked like a hang after hit/miss/P.
+*   Restoring the saved PIA control bytes after the tone fixes that.
+*
+* Why you may still hear silence even when Tone runs:
+*   1) Linux: XRoar app stream often muted in Pulse/PipeWire (not master).
+*   2) Need AUDIO ON before EXEC (main.bas does this).
+*   3) -ao-gain 0 is 0 dB (full), not mute — check host mixer.
+*
+* Tone: save PIA0/1 control, enable mux like hello, short DAC wiggle on
+* $FF20 only for the loop, then restore PIA exactly. IRQs masked only
+* during the click, then CC restored via puls.
 ***********************************************************************
 SoundInit
+        * Leave keyboard PIA alone; AUDIO ON already set the path.
+        lda     #$80
+        sta     $FF20
         rts
 
+* A = 0 miss (lower), 1 hit, 2+ sink/win. Always restores PIA.
 Tone
-Beep
-Click
+        pshs    cc,a,b,x
+        orcc    #$50            ; no IRQ mid-click
+        * --- save PIA control (keyboard lives in $FF01/$FF03) ---
+        lda     $FF01
+        sta     SvFF01
+        lda     $FF03
+        sta     SvFF03
+        lda     $FF23
+        sta     SvFF23
+        * --- enable 6-bit sound path (same as hello/beep.asm) ---
+        lda     $FF01
+        ora     #$08
+        sta     $FF01
+        lda     #$3C
+        sta     $FF03
+        sta     $FF23
+        * --- pick length/pitch from original A ---
+        lda     1,s             ; A after CC on stack
+        tsta
+        beq     tn0
+        cmpa    #1
+        beq     tn1
+        ldb     #4              ; sink — short
+        ldx     #16
+        bra     tng
+tn0     ldb     #3
+        ldx     #30
+        bra     tng
+tn1     ldb     #4
+        ldx     #20
+tng
+tn_o    lda     #$80
+tn_i    sta     $FF20
+        eora    #$3F
+        sta     $FF20
+        pshs    x
+tn_d    leax    -1,x
+        bne     tn_d
+        puls    x
+        deca
+        bne     tn_i
+        decb
+        bne     tn_o
+        lda     #$80
+        sta     $FF20
+        * --- restore keyboard + sound PIA (critical) ---
+        lda     SvFF01
+        sta     $FF01
+        lda     SvFF03
+        sta     $FF03
+        lda     SvFF23
+        sta     $FF23
+        puls    cc,a,b,x        ; IRQs back as they were
         rts
+
+Beep
+        lbra    Tone
+Click
+        rts                     ; placement stays silent
+
+* Saved next to code (LOADM image), not zero-page BSS
+SvFF01  fcb     0
+SvFF03  fcb     0
+SvFF23  fcb     0
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
