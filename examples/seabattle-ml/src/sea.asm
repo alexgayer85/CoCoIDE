@@ -2129,39 +2129,34 @@ KChar   fcb     0
 
 * Sound / RNG
 *
-* From Tepolt, Assembly Language Programming for the Color Computer (1985),
-* Ch.10 "Sound" + Listing 10-2 (SLTON):
-*   - DAC path needs selector on PIA1 CA2/CB2 ($FF01/$FF03) — KEYBOARD PIA.
-*   - That is what froze our game when hello-style beeps rewrote $FF03.
-*   - PB1 of PIA2 ($FF22 bit1) is a separate sound source; setup uses only
-*     $FF22/$FF23 (PIA2). AUDIO ON already routes audio; we only toggle PB1.
-*   - Never write $FF01/$FF03 here.
+* Tepolt Ch.10 / Listing 10-2: PB1 of PIA2 ($FF22 bit1) only — never $FF01/$FF03
+* (keyboard). Effects:
+*   A=0 miss  → splash (white-noise-ish random PB1 toggles)
+*   A=1 hit   → short explosion (noise burst + pitch dive)
+*   A=2+ sink → longer boom (noise + deeper dive)
 ***********************************************************************
 SoundInit
-        * Configure PB1 as output once (Tepolt listing 10-2 lines 160-230).
         pshs    a
         lda     $FF23
-        anda    #$FB            ; bit2=0 → access DDRB
+        anda    #$FB            ; bit2=0 → DDRB
         sta     $FF23
         lda     $FF22
-        ora     #$02            ; PB1 = output
+        ora     #$02            ; PB1 output
         sta     $FF22
         lda     $FF23
-        ora     #$04            ; bit2=1 → access DRB
+        ora     #$04            ; bit2=1 → DRB
         sta     $FF23
         puls    a
         rts
 
-* A=0 miss (low), 1 hit, 2+ sink/win. PB1 square wave only (no keyboard PIA).
+* Enter with A = effect id. Uses only $FF22/$FF23 (+ Rnd for noise).
 Tone
         pshs    cc,a,b,x,y
-        orcc    #$50            ; IRQs off during click
-        * save PIA2 data/control only
+        orcc    #$50
         lda     $FF23
         sta     SvFF23
         lda     $FF22
         sta     SvFF22
-        * ensure DDRB has PB1 out, then DRB access (idempotent)
         lda     $FF23
         anda    #$FB
         sta     $FF23
@@ -2171,36 +2166,130 @@ Tone
         lda     SvFF23
         ora     #$04
         sta     $FF23
-        * pitch / length from original A (at 1,s after pshs cc,a,b,x,y — careful)
-        * Stack after pshs cc,a,b,x,y: order X,Y,B,A,CC → ,s=CC 1,s=A
-        lda     1,s
+        lda     1,s             ; original A (CC,A,B,X,Y push → A at 1,s)
         tsta
-        beq     tn0
+        lbeq    SndSplash
         cmpa    #1
-        beq     tn1
-        ldb     #24             ; sink — more toggles
-        ldx     #18
-        bra     tng
-tn0     ldb     #12             ; miss — lower pitch (longer delay)
-        ldx     #40
-        bra     tng
-tn1     ldb     #16             ; hit
-        ldx     #24
-tng     lda     $FF22
-tn_lp   eora    #$02            ; toggle PB1 (Tepolt SLB)
-        sta     $FF22
-        tfr     x,y
-tn_d    leay    -1,y
-        bne     tn_d
-        decb
-        bne     tn_lp
-        * restore PIA2
-        lda     SvFF22
+        lbeq    SndBoom
+        lbra    SndSink
+
+* --- shared exit ---
+SndDone lda     SvFF22
         sta     $FF22
         lda     SvFF23
         sta     $FF23
         puls    cc,a,b,x,y
         rts
+
+* Inline LFSR step → A = new Rnd (clobbers A only)
+Lfsr    lda     Rnd
+        bne     lf1
+        lda     #$A5
+lf1     lsra
+        bcc     lf2
+        eora    #$B4
+lf2     tsta
+        bne     lf3
+        lda     #1
+lf3     sta     Rnd
+        rts
+
+* Toggle PB1 once (preserves A via stack)
+Pb1Flip pshs    a
+        lda     $FF22
+        eora    #$02
+        sta     $FF22
+        puls    a
+        rts
+
+* Delay Y iterations (Y destroyed)
+DlyY    leay    -1,y
+        bne     DlyY
+        rts
+
+***********************************************************************
+* Miss splash — dense random toggles ≈ white noise / water
+***********************************************************************
+SndSplash
+        ldb     #90             ; noise samples
+spl_lp  lbsr    Lfsr
+        * sometimes skip toggle → uneven crackle
+        bita    #1
+        beq     spl_sk
+        lbsr    Pb1Flip
+spl_sk  * short random delay 2..17
+        lda     Rnd
+        anda    #$0F
+        adda    #2
+        tfr     a,y
+        lbsr    DlyY
+        decb
+        bne     spl_lp
+        * soft “drip” tail — a few slower toggles
+        ldb     #6
+        ldx     #50
+spl_t   lbsr    Pb1Flip
+        tfr     x,y
+        lbsr    DlyY
+        leax    8,x
+        decb
+        bne     spl_t
+        lbra    SndDone
+
+***********************************************************************
+* Hit explosion — noise pop + falling pitch
+***********************************************************************
+SndBoom
+        * 1) sharp noise burst
+        ldb     #28
+bm_n    lbsr    Lfsr
+        lbsr    Pb1Flip
+        lda     Rnd
+        anda    #7
+        inca
+        tfr     a,y
+        lbsr    DlyY
+        decb
+        bne     bm_n
+        * 2) pitch dive (high → low)
+        ldx     #6              ; short delay = high pitch
+        ldb     #36
+bm_d    lbsr    Pb1Flip
+        tfr     x,y
+        lbsr    DlyY
+        lbsr    Pb1Flip
+        tfr     x,y
+        lbsr    DlyY
+        leax    2,x             ; lengthen delay → lower pitch
+        decb
+        bne     bm_d
+        lbra    SndDone
+
+***********************************************************************
+* Sink / win — longer noise + deeper boom
+***********************************************************************
+SndSink
+        ldb     #50
+sk_n    lbsr    Lfsr
+        bita    #2
+        beq     sk_sk
+        lbsr    Pb1Flip
+sk_sk   lda     Rnd
+        anda    #$0F
+        adda    #1
+        tfr     a,y
+        lbsr    DlyY
+        decb
+        bne     sk_n
+        ldx     #10
+        ldb     #50
+sk_d    lbsr    Pb1Flip
+        tfr     x,y
+        lbsr    DlyY
+        leax    3,x
+        decb
+        bne     sk_d
+        lbra    SndDone
 
 Beep
         lbra    Tone
