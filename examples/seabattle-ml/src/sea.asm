@@ -924,20 +924,19 @@ pt_fire
 pt_ms   leax    TMMiss,pcr
         lbra    pt_msg
 pt_sk   lbsr    MsgSunk
-        lda     #2
-        lbsr    Tone
         lbsr    PauseLong
+        lbsr    KeyFlush        ; Space fully up before computer / next input
         rts
 pt_al   leax    TMAlr,pcr
         lbsr    ShowMsg
         lbsr    PauseMed
+        lbsr    KeyFlush
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!
+        * X → HIT!/MISS!  — no Tone (PIA sound path freezes input)
         lbsr    ShowMsg
-        lda     HT              ; 0=miss 1=hit (3 handled in pt_sk)
-        lbsr    Tone
         lbsr    PauseMed
+        lbsr    KeyFlush
         rts
 
 ComputerTurn
@@ -1003,21 +1002,16 @@ ct_ac
         sta     HC
         leax    TMCht,pcr
         lbsr    ShowMsg
-        lda     #1
-        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMCms,pcr
         lbsr    ShowMsg
-        clra
-        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
         lbsr    MsgSunk
-        lda     #2
-        lbsr    Tone
 ct_end  lbsr    PauseLong
         lbsr    PauseMed
         lbsr    ClearMsg
+        lbsr    KeyFlush
         rts
 
 * Wipe full 8-pixel status band (y=180..187), then draw string at X.
@@ -1996,94 +1990,18 @@ KChar   fcb     0
 
 
 * Sound / RNG
-*
-* Why earlier tones "froze" the game:
-*   Hello beep.asm writes $FF01/$FF03 (PIA0) to enable the TV sound mux.
-*   PIA0 is ALSO the keyboard matrix. Leaving $FF03=$3C permanently broke
-*   POLCAT → WaitKey never saw keys → looked like a hang after hit/miss/P.
-*   Restoring the saved PIA control bytes after the tone fixes that.
-*
-* Why you may still hear silence even when Tone runs:
-*   1) Linux: XRoar app stream often muted in Pulse/PipeWire (not master).
-*   2) Need AUDIO ON before EXEC (main.bas does this).
-*   3) -ao-gain 0 is 0 dB (full), not mute — check host mixer.
-*
-* Tone: save PIA0/1 control, enable mux like hello, short DAC wiggle on
-* $FF20 only for the loop, then restore PIA exactly. IRQs masked only
-* during the click, then CC restored via puls.
+* HARD NO-OP. Any write to $FF01/$FF03 (keyboard PIA) during combat has
+* frozen input after the first shot on XRoar, even with save/restore.
+* Splash/title do not need sound. Revisit only with a DAC-only routine
+* that never touches PIA0, tested after hit/miss specifically.
 ***********************************************************************
 SoundInit
-        * Leave keyboard PIA alone; AUDIO ON already set the path.
-        lda     #$80
-        sta     $FF20
         rts
 
-* A = 0 miss (lower), 1 hit, 2+ sink/win. Always restores PIA.
 Tone
-        pshs    cc,a,b,x
-        orcc    #$50            ; no IRQ mid-click
-        * --- save PIA control (keyboard lives in $FF01/$FF03) ---
-        lda     $FF01
-        sta     SvFF01
-        lda     $FF03
-        sta     SvFF03
-        lda     $FF23
-        sta     SvFF23
-        * --- enable 6-bit sound path (same as hello/beep.asm) ---
-        lda     $FF01
-        ora     #$08
-        sta     $FF01
-        lda     #$3C
-        sta     $FF03
-        sta     $FF23
-        * --- pick length/pitch from original A ---
-        lda     1,s             ; A after CC on stack
-        tsta
-        beq     tn0
-        cmpa    #1
-        beq     tn1
-        ldb     #4              ; sink — short
-        ldx     #16
-        bra     tng
-tn0     ldb     #3
-        ldx     #30
-        bra     tng
-tn1     ldb     #4
-        ldx     #20
-tng
-tn_o    lda     #$80
-tn_i    sta     $FF20
-        eora    #$3F
-        sta     $FF20
-        pshs    x
-tn_d    leax    -1,x
-        bne     tn_d
-        puls    x
-        deca
-        bne     tn_i
-        decb
-        bne     tn_o
-        lda     #$80
-        sta     $FF20
-        * --- restore keyboard + sound PIA (critical) ---
-        lda     SvFF01
-        sta     $FF01
-        lda     SvFF03
-        sta     $FF03
-        lda     SvFF23
-        sta     $FF23
-        puls    cc,a,b,x        ; IRQs back as they were
-        rts
-
 Beep
-        lbra    Tone
 Click
-        rts                     ; placement stays silent
-
-* Saved next to code (LOADM image), not zero-page BSS
-SvFF01  fcb     0
-SvFF03  fcb     0
-SvFF23  fcb     0
+        rts
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
