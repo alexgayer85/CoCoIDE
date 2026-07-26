@@ -846,31 +846,25 @@ pt_fire
 pt_ms   leax    TMMiss,pcr
         lbra    pt_msg
 pt_sk   lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
         lbsr    PauseLong
         rts
 pt_al   leax    TMAlr,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        lbsr    ShowMsg
         lbsr    PauseMed
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!  — no Tone (DAC path froze combat after MISS)
-        pshs    x
-        lbsr    ClearMsg
-        puls    x
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        * X → HIT!/MISS! — wipe full status band first
+        lbsr    ShowMsg
+        lda     HT
+        lbsr    Tone
         lbsr    PauseMed
         rts
 
 ComputerTurn
-        lbsr    ClearMsg
         leax    TMComp,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        lbsr    ShowMsg
         lbsr    AiPick
         lda     AR
         beq     ct_fix
@@ -907,7 +901,6 @@ ct_ac
         beq     ct_m
         cmpa    #3
         beq     ct_s
-        * hit — hunt + message
         lda     #1
         sta     Hunt
         lda     AR
@@ -915,20 +908,32 @@ ct_ac
         lda     AC
         sta     HC
         leax    TMHit,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        lbsr    ShowMsg
+        lda     #1
+        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMMiss,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
+        lbsr    ShowMsg
+        clra
+        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
-        lbsr    MsgSunk         ; enemy sank one of yours
+        lbsr    MsgSunk
+        lda     #2
+        lbsr    Tone
 ct_end  lbsr    PauseMed
         lbsr    ClearMsg
         rts
+
+* Wipe full 8-pixel status band (y=180..187), then draw string at X.
+* Old ClearMsg only erased 1 scanline → leftover glyphs looked messy.
+ShowMsg
+        pshs    x
+        lbsr    ClearMsg
+        puls    x
+        lda     #8
+        ldb     #180
+        lbra    DrawStr
 
 ClearMsg
         pshs    a,b,x
@@ -937,11 +942,16 @@ ClearMsg
         mul
         tfr     d,x
         leax    GFX,x
-        ldb     #32
+        ldb     #8              ; 8 rows = one text line
+cm_r    pshs    b
+        ldb     #32             ; full width
         clra
-cm1     sta     ,x+
+cm_c    sta     ,x+
         decb
-        bne     cm1
+        bne     cm_c
+        puls    b
+        decb
+        bne     cm_r
         puls    a,b,x
         rts
 
@@ -1308,6 +1318,24 @@ DrawBattle
         rts
 
 DrawScores
+        * wipe score strip (y=168..175) so shorter numbers leave no trails
+        pshs    a,b,x
+        lda     #168
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        leax    GFX,x
+        ldb     #8
+dsc_r   pshs    b
+        ldb     #32
+        clra
+dsc_c   sta     ,x+
+        decb
+        bne     dsc_c
+        puls    b
+        decb
+        bne     dsc_r
+        puls    a,b,x
         leax    TScE,pcr
         lda     #8
         ldb     #168
@@ -1459,14 +1487,13 @@ cfa1    sta     ,x
         bne     cfa1
         rts
 
-* Empty = hollow box. Miss = splash (distinct from all ships). Hit = X.
+* Empty = hollow box. Miss = open ring. Hit = bold X (must not look alike).
 PatEmpty
         fcb     $FF,$81,$81,$81,$81,$81,$81,$FF
 PatMiss
-        * ring splash — white frame + 4-dot burst (not a hull bar)
-        fcb     $FF,$81,$A5,$99,$99,$A5,$81,$FF
+        fcb     $00,$3C,$66,$42,$42,$66,$3C,$00  * open O / splash
 PatHit
-        fcb     $FF,$C3,$A5,$99,$99,$A5,$C3,$FF
+        fcb     $C3,$E7,$7E,$3C,$3C,$7E,$E7,$C3  * bold X
 PatShip
         fcb     $00,$3C,$7E,$FF,$FF,$7E,$3C,$18  * 1 carrier
         fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18  * 2 battleship
@@ -1747,7 +1774,7 @@ Font8
         fcb     $00,$00,$00,$7E,$00,$00,$00,$00  * -
         fcb     $00,$00,$00,$00,$00,$00,$18,$18  * .
         fcb     $03,$06,$0C,$18,$30,$60,$C0,$00  * /
-        fcb     $7E,$C3,$C7,$CF,$DE,$E6,$C3,$7E  * 0
+        fcb     $3C,$66,$C3,$C3,$C3,$C3,$66,$3C  * 0 (clean oval; old had slash junk)
         fcb     $18,$38,$78,$18,$18,$18,$18,$7E  * 1
         fcb     $7E,$C3,$03,$06,$0C,$18,$30,$FF  * 2
         fcb     $7E,$C3,$03,$1E,$03,$03,$C3,$7E  * 3
