@@ -105,16 +105,16 @@ c1      clr     ,x+
         rts
 
 ***********************************************************************
-* Title — main.bas LOADM"NAVAL" paints $0E00 before EXEC.
-* BlitSplash re-paints from embedded copy (fallback) then key prompt.
+* Title — main.bas LOADM"NAVAL" already painted $0E00 before EXEC.
+* Do NOT re-blit the 6K frame here (byte copy felt like a long pause
+* before the copyright line). Only overlay the bottom bar text.
 ***********************************************************************
 TitleScreen
-        lbsr    BlitSplash
-        * dark bar so text is readable on busy art
+        * dark bar so text is readable on busy art (image already on screen)
         lda     #176
         ldb     #16
         lbsr    ClearRows
-        * short copyright credit first
+        * short copyright credit first (immediate — no image re-copy)
         leax    TCopy,pcr
         lda     #48             ; ~center "(C) Alex Gayer 2026"
         ldb     #180
@@ -130,21 +130,6 @@ TitleScreen
         ldb     #180
         lbsr    DrawStr
         lbsr    WaitKey
-        rts
-
-* Splash → $0E00 (absolute X). Byte loop — no auto-inc surprises.
-BlitSplash
-        pshs    a,b,x,y
-        ldx     #Splash
-        ldy     #GFX
-        ldd     #6144
-bs_lp   pshs    b
-        ldb     ,x+
-        stb     ,y+
-        puls    b
-        subd    #1
-        bne     bs_lp
-        puls    a,b,x,y
         rts
 
 * A=startY B=rows — black bar on GFX page
