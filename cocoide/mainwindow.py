@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QAction, QFont, QKeySequence, QCloseEvent, QDesktopServices
+from PySide6.QtCore import Qt, QUrl, QSize
+from PySide6.QtGui import (
+    QAction,
+    QFont,
+    QKeySequence,
+    QCloseEvent,
+    QDesktopServices,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
