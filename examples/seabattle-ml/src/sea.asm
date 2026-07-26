@@ -846,8 +846,6 @@ pt_fire
 pt_ms   leax    TMMiss,pcr
         lbra    pt_msg
 pt_sk   lbsr    MsgSunk
-        lda     #2
-        lbsr    Tone
         lbsr    PauseLong
         rts
 pt_al   leax    TMAlr,pcr
@@ -855,10 +853,8 @@ pt_al   leax    TMAlr,pcr
         lbsr    PauseMed
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS! — wipe full status band first
+        * X → HIT!/MISS! — wipe full status band; NO sound (Tone freezes)
         lbsr    ShowMsg
-        lda     HT
-        lbsr    Tone
         lbsr    PauseMed
         rts
 
@@ -909,18 +905,12 @@ ct_ac
         sta     HC
         leax    TMHit,pcr
         lbsr    ShowMsg
-        lda     #1
-        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMMiss,pcr
         lbsr    ShowMsg
-        clra
-        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
         lbsr    MsgSunk
-        lda     #2
-        lbsr    Tone
 ct_end  lbsr    PauseMed
         lbsr    ClearMsg
         rts
@@ -1774,7 +1764,8 @@ Font8
         fcb     $00,$00,$00,$7E,$00,$00,$00,$00  * -
         fcb     $00,$00,$00,$00,$00,$00,$18,$18  * .
         fcb     $03,$06,$0C,$18,$30,$60,$C0,$00  * /
-        fcb     $3C,$66,$C3,$C3,$C3,$C3,$66,$3C  * 0 (clean oval; old had slash junk)
+        * slashed zero — oval + thin diagonal; no extra right-edge bits
+        fcb     $3C,$66,$C3,$D3,$CB,$C3,$66,$3C  * 0
         fcb     $18,$38,$78,$18,$18,$18,$18,$7E  * 1
         fcb     $7E,$C3,$03,$06,$0C,$18,$30,$FF  * 2
         fcb     $7E,$C3,$03,$1E,$03,$03,$C3,$7E  * 3
@@ -1878,9 +1869,10 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG — STUBBED. Any DAC/PIA write during play has frozen
-* P-place and MISS paths on real XRoar runs. Re-enable only after a
-* proven-safe path (hello beep is fine alone; hybrid PMODE+key is not).
+* Sound / RNG
+* Sound is intentionally a no-op. Every live DAC/PIA Tone path has frozen
+* combat (after hit or miss) on XRoar in this hybrid PMODE4 game. Do not
+* reintroduce lbsr Tone/Beep/Click until proven outside the game loop.
 ***********************************************************************
 SoundInit
         rts
