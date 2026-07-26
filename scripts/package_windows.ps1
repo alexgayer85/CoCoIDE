@@ -51,6 +51,15 @@ $work = Join-Path $Root "build\pyinstaller"
 if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 
 Write-Host "==> PyInstaller onedir (windowed)"
+# Absolute --add-data paths: with --specpath under build/, relative cocoide\…
+# is resolved against the work dir and fails on CI.
+$StyleQss = Join-Path $Root "cocoide\style.qss"
+$AssetsDir = Join-Path $Root "cocoide\assets"
+$Entry = Join-Path $Root "packaging\win_entry.py"
+if (-not (Test-Path $StyleQss)) { throw "missing $StyleQss" }
+if (-not (Test-Path $AssetsDir)) { throw "missing $AssetsDir" }
+if (-not (Test-Path $Entry)) { throw "missing $Entry" }
+
 # Do not --collect-all PySide6 (WebEngine bloat).
 python -m PyInstaller --noconfirm --clean `
   --name CoCoIDE `
@@ -83,9 +92,9 @@ python -m PyInstaller --noconfirm --clean `
   --exclude-module PySide6.Qt3DCore `
   --exclude-module PySide6.QtBluetooth `
   --exclude-module PySide6.QtMultimedia `
-  --add-data "cocoide\style.qss;cocoide" `
-  --add-data "cocoide\assets;cocoide\assets" `
-  "packaging\win_entry.py"
+  --add-data "$StyleQss;cocoide" `
+  --add-data "$AssetsDir;cocoide\assets" `
+  $Entry
 
 if (-not (Test-Path (Join-Path $PyDist "CoCoIDE.exe"))) {
     throw "PyInstaller did not produce dist\CoCoIDE\CoCoIDE.exe"
