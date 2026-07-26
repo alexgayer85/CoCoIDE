@@ -35,8 +35,8 @@ JSON settings for the project. Important fields:
 | Field | Meaning | Example |
 |-------|---------|---------|
 | `name` | Display name | `"hello"` |
-| `target` | Machine | `"coco1"`, `"coco2"`, `"coco3"` |
-| `memory_kb` | RAM for XRoar / checks | `64`, `128`, `512` |
+| `target` | Machine | `"coco1"`, `"coco2"`, `"coco3"` (bootable profiles only) |
+| `memory_kb` | RAM for XRoar / checks | CoCo 1/2: `16`/`32`/`64` · CoCo 3: `128`/`512` |
 | `dialect` | BASIC dialect | `"decb"` |
 | `entry` | Main modern source | `"src/main.mbas"` |
 | `disk_image` | DECB image path | `"build/work.dsk"` |
@@ -62,6 +62,8 @@ Example:
 ```
 
 The toolbar **Auto-run** checkbox writes `auto_run` when toggled.
+
+The green **target chip** (`CoCo 3 · 512K · DECB`) is a **button**: click it (or **File → Project Settings…**, **Ctrl+,**) to change `target` and `memory_kb` without editing JSON by hand.
 
 ### Standalone list forms
 
@@ -95,8 +97,18 @@ Keep `src/` in version control. Treat `build/` as disposable (often gitignored).
 
 Changing `target` / `memory_kb` changes:
 
-- XRoar machine (`coco3`, `coco2bus`, …) and `-ram`  
+- XRoar machine (`coco3`, `coco2bus`, `cocous`, …) and `-ram`  
 - Diagnostics (e.g. CoCo 3-only keywords on a CoCo 2 project)
+
+**Sane pairs only** (invalid combos are clamped on load/save/Run):
+
+| Machine | XRoar profile | Allowed RAM |
+|---------|---------------|-------------|
+| CoCo 1 (NTSC) | `cocous` | 16K, 32K, 64K |
+| CoCo 2 (NTSC) | `coco2bus` | 32K, 64K |
+| CoCo 3 (NTSC) | `coco3` | 128K, 512K |
+
+Needs ROMs under `~/.xroar/roms` (e.g. `bas13`+`extbas`+`disk11`, or `coco3`+`disk11`). Odd XRoar clones / PAL-only machines are not offered in the UI.
 
 See [Diagnostics](07-diagnostics.md).
 

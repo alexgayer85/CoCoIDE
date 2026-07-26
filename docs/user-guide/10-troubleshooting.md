@@ -20,7 +20,16 @@ Status bar: `xroar=missing` or `decb=missing`.
 
 XRoar needs **ROM images**. CoCoIDE does not ship copyrighted ROMs.
 
-Configure ROMs the way XRoar expects (config file / ROM paths). See the [XRoar manual](https://www.6809.org.uk/xroar/doc/).
+Typical layout under `~/.xroar/roms/`:
+
+| Goal | ROMs |
+|------|------|
+| CoCo 1 / 2 (NTSC) | `bas13.rom`, `extbas10.rom` (or 1.1), `disk11.rom` |
+| CoCo 3 (NTSC) | `coco3.rom`, `disk11.rom` |
+
+Also check **Project Settings** (green chip): **CoCo 2 · 128K** (and similar) is invalid and used to pass a broken `-ram` to XRoar. The IDE now only offers legal sizes and clamps old projects.
+
+Configure extra ROMs as XRoar expects (config / ROM path). See the [XRoar manual](https://www.6809.org.uk/xroar/doc/).
 
 ## Auto-run does nothing / wrong program
 
@@ -54,7 +63,7 @@ Expected. Use **Build Disk** for modern BASIC.
 ## Build succeeds but Problems is full of red
 
 Diagnostics can flag target mismatches (e.g. CoCo 3 keywords on CoCo 2).  
-Either fix the source or set `"target": "coco3"` in `project.cocoide`.
+Either fix the source or click the green **target chip** (or **File → Project Settings…**) and choose **CoCo 3**.
 
 ## Emulator changes not saved
 

@@ -60,11 +60,27 @@ class Project:
         filtered = {k: v for k, v in data.items() if k in known and k != "root"}
         proj = cls(**filtered)
         proj.root = root
+        # Clamp illegal pairs (e.g. coco2 · 128K) so Run/diagnostics stay sane
+        try:
+            from cocoide.tools import normalize_target_ram
+
+            t, m = normalize_target_ram(proj.target, int(proj.memory_kb or 64))
+            proj.target, proj.memory_kb = t, m
+        except Exception:
+            pass
         return proj
 
     def save(self) -> Path:
         if not self.root:
             raise ValueError("Project has no root path")
+        try:
+            from cocoide.tools import normalize_target_ram
+
+            self.target, self.memory_kb = normalize_target_ram(
+                self.target, int(self.memory_kb or 64)
+            )
+        except Exception:
+            pass
         path = self.root / PROJECT_FILENAME
         path.write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
         return path

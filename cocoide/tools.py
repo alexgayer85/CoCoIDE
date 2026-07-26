@@ -351,12 +351,57 @@ def parse_granule_usage(free_text: str, dir_text: str = "") -> tuple[int | None,
     return free, total
 
 
+# Sane IDE targets → XRoar machine + allowed RAM.
+# Only profiles that boot with common ECB/DECB ROMs (bas+extbas+disk or coco3+disk).
+# Avoids odd clones, PAL-only variants, and illegal RAM (e.g. CoCo 2 · 512K).
+MACHINE_PROFILES: dict[str, dict] = {
+    "coco1": {
+        "label": "CoCo 1 (NTSC)",
+        "xroar": "cocous",
+        "ram_choices": (16, 32, 64),
+        "default_ram": 64,
+        "blurb": "Color + Extended BASIC. Needs bas13 + extbas + disk11 ROMs.",
+    },
+    "coco2": {
+        "label": "CoCo 2 (NTSC)",
+        "xroar": "coco2bus",
+        "ram_choices": (32, 64),
+        "default_ram": 64,
+        "blurb": "Best for classic DECB/PMODE games. 32K or 64K only.",
+    },
+    "coco3": {
+        "label": "CoCo 3 (NTSC)",
+        "xroar": "coco3",
+        "ram_choices": (128, 512),
+        "default_ram": 512,
+        "blurb": "Super Extended Color BASIC. Needs coco3.rom + disk11.",
+    },
+}
+
+
 def xroar_machine_flag(target: str) -> str:
-    return {
-        "coco1": "cocous",
-        "coco2": "coco2bus",
-        "coco3": "coco3",
-    }.get(target, "coco3")
+    """Map project target id to an XRoar machine profile that boots with stock ROMs."""
+    prof = MACHINE_PROFILES.get((target or "").lower())
+    if prof:
+        return str(prof["xroar"])
+    return "coco3"
+
+
+def normalize_target_ram(target: str, memory_kb: int) -> tuple[str, int]:
+    """Clamp target/RAM to a sane, bootable pair. Returns (target, memory_kb)."""
+    t = (target or "coco3").lower().strip()
+    if t not in MACHINE_PROFILES:
+        t = "coco3"
+    prof = MACHINE_PROFILES[t]
+    choices = tuple(int(x) for x in prof["ram_choices"])
+    try:
+        mem = int(memory_kb)
+    except (TypeError, ValueError):
+        mem = int(prof["default_ram"])
+    if mem not in choices:
+        # Pick nearest allowed size (prefer default if far)
+        mem = min(choices, key=lambda c: (abs(c - mem), abs(c - int(prof["default_ram"]))))
+    return t, mem
 
 
 def entry_disk_name(entry: str) -> str:
@@ -401,13 +446,16 @@ def build_xroar_command(
     Disk is attached with write-back disabled so emulator SAVEs do not dirty
     the project image. Auto-run uses -type to inject RUN\"NAME\".
     """
+    target, memory_kb = normalize_target_ram(target, memory_kb)
+    machine = xroar_machine_flag(target)
+    # -default-machine selects the boot profile (overrides ~/.xroar/xroar.conf).
     cmd = [
         xroar,
         "-default-machine",
-        xroar_machine_flag(target),
+        machine,
     ]
     if memory_kb:
-        cmd.extend(["-ram", str(memory_kb)])
+        cmd.extend(["-ram", str(int(memory_kb))])
 
     if audio:
         if ao or ao_gain:

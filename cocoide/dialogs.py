@@ -9,10 +9,25 @@ so nothing is truncated into \"F…d\" / \"N…r\".
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QFileDialog, QStyle, QToolButton, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QLabel,
+    QStyle,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+if TYPE_CHECKING:
+    from cocoide.project import Project
 
 # objectName → (short label, full tooltip, theme icons, standard pixmap)
 _TOOLBAR_BUTTONS: dict[
@@ -276,3 +291,154 @@ def ensure_dir(path: str | Path) -> str:
     except OSError:
         return str(Path.home())
     return str(p)
+
+
+# ── Project settings (target machine / RAM) ─────────────────────────
+
+_DIALOG_STYLE = """
+QDialog {
+    background-color: #1a1d23;
+    color: #e8eaed;
+    font-size: 13px;
+}
+QLabel { color: #c8cdd6; }
+QComboBox {
+    background-color: #161920;
+    color: #e8eaed;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-width: 200px;
+}
+QComboBox:hover { border-color: #f48c06; }
+QComboBox QAbstractItemView {
+    background-color: #161920;
+    color: #e8eaed;
+    selection-background-color: rgba(232, 93, 4, 0.35);
+}
+QPushButton {
+    background-color: #2a2f3a;
+    color: #e8eaed;
+    border: 1px solid #3a4150;
+    border-radius: 5px;
+    padding: 5px 14px;
+}
+QPushButton:hover { border-color: #f48c06; }
+QPushButton:default {
+    background-color: #e85d04;
+    color: #1a1008;
+    font-weight: 600;
+    border: none;
+}
+"""
+
+
+def edit_project_settings(
+    parent: QWidget | None,
+    project: "Project",
+) -> bool:
+    """Show project target / RAM dialog. Returns True if the project was changed and saved."""
+    from cocoide.tools import MACHINE_PROFILES, normalize_target_ram
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Project settings")
+    dlg.setModal(True)
+    dlg.setStyleSheet(_DIALOG_STYLE)
+    dlg.setMinimumWidth(400)
+
+    layout = QVBoxLayout(dlg)
+    intro = QLabel(
+        "Bootable machine + RAM for diagnostics, Build, and XRoar.\n"
+        "Only combinations that match real CoCo configs are listed.\n"
+        "Saved to project.cocoide."
+    )
+    intro.setWordWrap(True)
+    intro.setStyleSheet("color: #9aa3b2; margin-bottom: 8px;")
+    layout.addWidget(intro)
+
+    form = QFormLayout()
+    form.setSpacing(10)
+
+    # Normalize current project so invalid pairs (e.g. coco2·128K) open cleanly
+    cur_target, cur_mem = normalize_target_ram(
+        project.target, int(project.memory_kb or 64)
+    )
+
+    combo_target = QComboBox()
+    for key, prof in MACHINE_PROFILES.items():
+        combo_target.addItem(str(prof["label"]), key)
+    idx = combo_target.findData(cur_target)
+    if idx < 0:
+        idx = combo_target.findData("coco3")
+    combo_target.setCurrentIndex(max(0, idx))
+    form.addRow("Machine:", combo_target)
+
+    combo_mem = QComboBox()
+    combo_mem.setEditable(False)
+    form.addRow("Memory:", combo_mem)
+
+    blurb = QLabel("")
+    blurb.setWordWrap(True)
+    blurb.setStyleSheet("color: #6b7380; font-size: 11px;")
+
+    def _refill_memory(target_key: str, prefer_kb: int | None = None) -> None:
+        prof = MACHINE_PROFILES.get(target_key) or MACHINE_PROFILES["coco3"]
+        choices = list(prof["ram_choices"])
+        want = prefer_kb if prefer_kb is not None else int(prof["default_ram"])
+        combo_mem.blockSignals(True)
+        combo_mem.clear()
+        for kb in choices:
+            combo_mem.addItem(f"{kb}K", int(kb))
+        # clamp prefer into choices
+        if want not in choices:
+            want = int(prof["default_ram"])
+        midx = combo_mem.findData(want)
+        combo_mem.setCurrentIndex(max(0, midx))
+        combo_mem.blockSignals(False)
+        blurb.setText(str(prof.get("blurb") or ""))
+
+    _refill_memory(cur_target, cur_mem)
+
+    def _on_target_changed(_i: int = 0) -> None:
+        key = str(combo_target.currentData() or "coco3")
+        # Keep current selection if still legal; else default for machine
+        prev = combo_mem.currentData()
+        _refill_memory(key, int(prev) if prev is not None else None)
+
+    combo_target.currentIndexChanged.connect(_on_target_changed)
+
+    dialect_lab = QLabel((project.dialect or "decb").upper() + " (Disk Extended BASIC)")
+    dialect_lab.setStyleSheet("color: #9aa3b2;")
+    form.addRow("Dialect:", dialect_lab)
+
+    layout.addLayout(form)
+    layout.addWidget(blurb)
+
+    hint = QLabel(
+        "XRoar needs ROMs in ~/.xroar/roms (bas13+extbas+disk11, or coco3+disk11). "
+        "CoCo 3 keywords (HSCREEN, WIDTH, …) require CoCo 3."
+    )
+    hint.setWordWrap(True)
+    hint.setStyleSheet("color: #6b7380; font-size: 11px; margin-top: 8px;")
+    layout.addWidget(hint)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+    )
+    buttons.accepted.connect(dlg.accept)
+    buttons.rejected.connect(dlg.reject)
+    layout.addWidget(buttons)
+
+    if dlg.exec() != QDialog.DialogCode.Accepted:
+        return False
+
+    new_target = str(combo_target.currentData() or "coco3")
+    new_mem = int(combo_mem.currentData() or cur_mem)
+    new_target, new_mem = normalize_target_ram(new_target, new_mem)
+    if new_target == project.target and new_mem == project.memory_kb:
+        return False
+
+    project.target = new_target
+    project.memory_kb = new_mem
+    project.save()
+    return True

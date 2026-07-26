@@ -30,7 +30,12 @@ from PySide6.QtWidgets import (
 
 from cocoide import __version__
 from cocoide.build import build_project, disk_listing, ensure_disk, run_project
-from cocoide.dialogs import get_existing_directory, get_open_file_name, get_save_file_name
+from cocoide.dialogs import (
+    edit_project_settings,
+    get_existing_directory,
+    get_open_file_name,
+    get_save_file_name,
+)
 from cocoide.diagnostics import Diagnostic
 from cocoide.project import PROJECT_FILENAME, Project
 from cocoide.tools import (
@@ -213,6 +218,10 @@ class MainWindow(QMainWindow):
         act_save.setShortcut(QKeySequence.StandardKey.Save)
         act_save.triggered.connect(self.save_current)
         file_menu.addAction(act_save)
+        act_settings = QAction("Project Settings…", self)
+        act_settings.setShortcut("Ctrl+,")
+        act_settings.triggered.connect(self.edit_project_settings)
+        file_menu.addAction(act_settings)
         file_menu.addSeparator()
         act_browse_dsk = QAction("Browse Disk Image…", self)
         act_browse_dsk.setShortcut("Ctrl+Shift+O")
@@ -294,8 +303,14 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         tb.addWidget(spacer)
 
-        self.chip_target = QLabel("No project")
+        self.chip_target = QPushButton("No project")
         self.chip_target.setObjectName("chip")
+        self.chip_target.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chip_target.setToolTip(
+            "Click to set bootable machine + RAM (CoCo 1/2/3 only) — saved to project.cocoide"
+        )
+        self.chip_target.setEnabled(False)
+        self.chip_target.clicked.connect(self.edit_project_settings)
         tb.addWidget(self.chip_target)
         self.chip_disk = QLabel("—")
         self.chip_disk.setObjectName("chipDisk")
@@ -312,10 +327,12 @@ class MainWindow(QMainWindow):
     def _apply_project(self) -> None:
         if not self.project:
             self.chip_target.setText("No project")
+            self.chip_target.setEnabled(False)
             self.chip_disk.setText("—")
             return
         self.chk_autorun.setChecked(self.project.auto_run)
         self.chip_target.setText(self.project.target_chip)
+        self.chip_target.setEnabled(True)
         disk_name = Path(self.project.disk_image).name
         self.chip_disk.setText(disk_name)
         self.setWindowTitle(self._title())
@@ -325,6 +342,29 @@ class MainWindow(QMainWindow):
             self._open_file(self.project.entry_path)
         self.refresh_disk()
         self.status_tools.setText(self.tools.status_line())
+
+    def edit_project_settings(self) -> None:
+        """Change machine target and RAM (toolbar chip or File → Project Settings)."""
+        if not self.project:
+            QMessageBox.information(
+                self,
+                "No project",
+                "Open or create a project first, then set the machine target.",
+            )
+            return
+        try:
+            changed = edit_project_settings(self, self.project)
+        except OSError as exc:
+            QMessageBox.critical(self, "Project settings", str(exc))
+            return
+        if not changed:
+            return
+        self.chip_target.setText(self.project.target_chip)
+        self.status_extra.setText(
+            f"Target: {self.project.target_chip} · saved project.cocoide"
+        )
+        # Refresh tree so project.cocoide mtime/view is current
+        self._rebuild_tree()
 
     def _rebuild_tree(self) -> None:
         self.tree.clear()
