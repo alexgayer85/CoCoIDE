@@ -2127,126 +2127,100 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG — PB1 of PIA2 only (Tepolt Ch.10). Never $FF01/$FF03.
-* A=0 splash (short noise)  A=1 boom (dive)  A=2+ longer boom
-* All loops hard-bounded — no nested delay subs (Y=0 can spin ~65K).
+* Sound / RNG
+*
+* Tepolt Ch.10: DAC is $FF20 (PA7-PA2). Mux select is PIA1 ($FF01/$FF03) =
+* keyboard — never touch those (freezes input). main.bas AUDIO ON already
+* selects the DAC → TV path. We only stream samples to $FF20.
+*
+* A=0 splash (white noise)  A=1 hit boom  A=2+ sink boom
+* Dense sample loops so it is a hiss/thump, not one pop per half-second.
 ***********************************************************************
 SoundInit
-        pshs    a
-        lda     $FF23
-        anda    #$FB
-        sta     $FF23
-        lda     $FF22
-        ora     #$02
-        sta     $FF22
-        lda     $FF23
-        ora     #$04
-        sta     $FF23
-        puls    a
+        lda     #$80
+        sta     $FF20           ; mid DAC
         rts
 
 Tone
         pshs    cc,a,b,x,y
         orcc    #$50
-        lda     $FF23
-        sta     SvFF23
-        lda     $FF22
-        sta     SvFF22
-        lda     $FF23
-        anda    #$FB
-        sta     $FF23
-        lda     $FF22
-        ora     #$02
-        sta     $FF22
-        lda     SvFF23
-        ora     #$04
-        sta     $FF23
-        lda     1,s             ; saved A
+        lda     1,s             ; A after pshs cc,a,b,x,y
         tsta
         beq     SndSplash
         cmpa    #1
         beq     SndBoom
-        * fall into SndSink
-
-* --- sink: brief noise + pitch fall ---
-SndSink ldb     #20
-        bsr     NoiseBurst
-        ldx     #12
-        ldb     #28
-        bsr     PitchDive
+        * sink
+        ldx     #$0280          ; longer noise
+        bsr     DacNoise
+        ldy     #20             ; half-period start
+        ldb     #48
+        bsr     DacDive
         bra     SndDone
 
-* --- hit: short noise + quick dive ---
-SndBoom ldb     #12
-        bsr     NoiseBurst
-        ldx     #6
-        ldb     #22
-        bsr     PitchDive
+SndBoom ldx     #$0120
+        bsr     DacNoise
+        ldy     #12
+        ldb     #36
+        bsr     DacDive
         bra     SndDone
 
-* --- miss: short splash noise only (no long loop) ---
 SndSplash
-        ldb     #18
-        bsr     NoiseBurst
-        * two slower “drip” ticks
-        ldx     #35
-        ldb     #4
-        bsr     PitchDive
+        ldx     #$0200          ; ~dense white noise splash
+        bsr     DacNoise
+        * soft low drip
+        ldy     #40
+        ldb     #8
+        bsr     DacDive
 
-SndDone lda     SvFF22
-        sta     $FF22
-        lda     SvFF23
-        sta     $FF23
+SndDone lda     #$80
+        sta     $FF20
         puls    cc,a,b,x,y
         rts
 
-* B = number of random toggles (must be >0). Uses Rnd, clobbers A,X,Y.
-NoiseBurst
-nb_lp   lda     Rnd
-        bne     nb_r
-        lda     #$5A
-nb_r    lsra
-        bcc     nb_o
+* X = sample count (>0). Write LFSR bits to DAC as fast as possible.
+DacNoise
+dn_lp   lda     Rnd
+        bne     dn_r
+        lda     #$A5
+dn_r    lsra
+        bcc     dn_o
         eora    #$B4
-nb_o    sta     Rnd
-        * toggle PB1
-        lda     $FF22
-        eora    #$02
-        sta     $FF22
-        * delay 3..10 (never 0)
-        lda     Rnd
-        anda    #7
-        adda    #3
-        tfr     a,y
-nb_d    leay    -1,y
-        bne     nb_d
-        decb
-        bne     nb_lp
+dn_o    sta     Rnd
+        lsla                    ; align into PA7-PA2 (DAC)
+        lsla
+        sta     $FF20
+        * tiny settle (keeps sample rate in audible band, not 1 click)
+        nop
+        nop
+        leax    -1,x
+        bne     dn_lp
         rts
 
-* X = start delay (>=1), B = steps. Pitch falls as X grows.
-PitchDive
-pd_lp   lda     $FF22
-        eora    #$02
-        sta     $FF22
-        tfr     x,y
-        * if Y==0 would hang — force min 1
-        bne     pd_d
-        ldy     #1
-pd_d    leay    -1,y
-        bne     pd_d
-        leax    2,x
+* Square-wave pitch dive on DAC. Y=half-period (>=1), B=steps.
+DacDive
+dd_lp   lda     #$FC            ; high
+        sta     $FF20
+        tfr     y,x
+        bne     dd_h
+        ldx     #1
+dd_h    leax    -1,x
+        bne     dd_h
+        clra                    ; low
+        sta     $FF20
+        tfr     y,x
+        bne     dd_l
+        ldx     #1
+dd_l    leax    -1,x
+        bne     dd_l
+        leay    3,y             ; longer period → lower pitch
         decb
-        bne     pd_lp
+        bne     dd_lp
         rts
 
 Beep
         lbra    Tone
 Click
         rts
-
-SvFF22  fcb     0
-SvFF23  fcb     0
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
