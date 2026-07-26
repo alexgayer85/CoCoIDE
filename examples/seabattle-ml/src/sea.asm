@@ -313,10 +313,11 @@ pp_bad
         lbsr    Click
         lbra    pp_in
 pp_auto
-        * NO sound/Click here — Beep has hung this path before
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
+        lda     #1
+        lbsr    Tone            ; short confirm
 pp_done
         lbsr    DrawBoardsOnly
         rts
@@ -843,29 +844,38 @@ pt_fire
         lbeq    pt_ms
         cmpa    #3
         lbeq    pt_sk
+        * HIT
         leax    TMHit,pcr
+        lda     #1              ; tone 1 = hit
         lbra    pt_msg
 pt_ms   leax    TMMiss,pcr
+        clra                    ; tone 0 = miss
         lbra    pt_msg
-pt_sk   leax    TMSunk,pcr
-        lbra    pt_msg
+pt_sk   lbsr    MsgSunk         ; "SUNK <SHIP>" from SID; longer read
+        lda     #2              ; tone 2 = sink
+        lbsr    Tone
+        lbsr    PauseLong
+        lbsr    KeyFlush
+        rts
 pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseShort
+        lbsr    PauseMed
         lbsr    KeyFlush
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!/SUNK!  — no Beep; short pause only
+        * X → message, A = tone id
+        sta     TmpTone
         pshs    x
         lbsr    ClearMsg
         puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    PauseShort
-        * force key fully up so Space cannot auto-refire next WaitKey
+        lda     TmpTone
+        lbsr    Tone
+        lbsr    PauseMed        ; readable linger
         lbsr    KeyFlush
         rts
 
@@ -907,24 +917,36 @@ ct_ac
         sta     CC
         lbsr    DrawOneCell
         lbsr    DrawScores
-        leax    TMComp2,pcr
-        lda     #8
-        ldb     #180
-        lbsr    DrawStr
         lda     HT
         beq     ct_m
         cmpa    #3
         beq     ct_s
+        * hit — hunt + message
         lda     #1
         sta     Hunt
         lda     AR
         sta     HR
         lda     AC
         sta     HC
+        leax    TMHit,pcr
+        lda     #8
+        ldb     #180
+        lbsr    DrawStr
+        lda     #1
+        lbsr    Tone
         bra     ct_end
-ct_m    bra     ct_end
+ct_m    leax    TMMiss,pcr
+        lda     #8
+        ldb     #180
+        lbsr    DrawStr
+        clra
+        lbsr    Tone
+        bra     ct_end
 ct_s    clr     Hunt
-ct_end  lbsr    PauseShort
+        lbsr    MsgSunk         ; enemy sank one of yours
+        lda     #2
+        lbsr    Tone
+ct_end  lbsr    PauseMed
         lbsr    ClearMsg
         lbsr    KeyFlush
         rts
@@ -944,22 +966,73 @@ cm1     sta     ,x+
         puls    a,b,x
         rts
 
-* Short pauses only (long PauseRead felt like freezes after MISS)
-PauseRead
-        bra     PauseShort
+* Sunk banner: "SUNK " + craft name from SID (1..5)
+MsgSunk
+        pshs    a,b,x
+        lbsr    ClearMsg
+        leax    TMSunk,pcr
+        lda     #8
+        ldb     #180
+        lbsr    DrawStr
+        lda     SID
+        cmpa    #1
+        beq     msn1
+        cmpa    #2
+        beq     msn2
+        cmpa    #3
+        beq     msn3
+        cmpa    #4
+        beq     msn4
+        leax    TNDest,pcr
+        bra     msnx
+msn1    leax    TNCarr,pcr
+        bra     msnx
+msn2    leax    TNBatt,pcr
+        bra     msnx
+msn3    leax    TNCrui,pcr
+        bra     msnx
+msn4    leax    TNSub,pcr
+msnx    lda     #48             ; x after "SUNK " (8 + 5*8)
+        ldb     #180
+        lbsr    DrawStr
+        puls    a,b,x
+        rts
+
+* Pauses (register counters only — never BSS)
+* PauseShort ~0.25s, PauseMed ~0.9s, PauseLong ~1.8s @ 0.89MHz
 PauseShort
         pshs    a,b,x
-        ldb     #8
-ps0     ldx     #$1000
+        ldb     #6
+ps0     ldx     #$1400
 ps1     leax    -1,x
         bne     ps1
         decb
         bne     ps0
         puls    a,b,x
         rts
-TinyPause
-        bra     PauseShort
 PauseMed
+        pshs    a,b,x
+        ldb     #16
+pm0     ldx     #$2000
+pm1     leax    -1,x
+        bne     pm1
+        decb
+        bne     pm0
+        puls    a,b,x
+        rts
+PauseLong
+        pshs    a,b,x
+        ldb     #32
+pl0     ldx     #$2400
+pl1     leax    -1,x
+        bne     pl1
+        decb
+        bne     pl0
+        puls    a,b,x
+        rts
+PauseRead
+        bra     PauseMed
+TinyPause
         bra     PauseShort
 
 DrawBattleHUD
@@ -1205,30 +1278,33 @@ ait_bad orcc    #$01
         rts
 
 ***********************************************************************
-* Game over
+* Game over — draw first, short fanfare, linger, then wait for key.
+* (Old path called Beep before draw and could appear frozen on win.)
 ***********************************************************************
 GameOver
+        lbsr    KeyFlush
         lbsr    DrawBattle
         lda     EH
         bne     gol
         leax    TWin,pcr
-        lda     #2
+        lda     #2              ; win tone
         bra     gow
 gol     leax    TLose,pcr
-        clra
-gow     pshs    x
-        lbsr    Beep
-        puls    x
+        clra                    ; lose tone
+gow     pshs    a,x             ; tone, message
+        lda     ,s
+        lbsr    Tone
+        puls    a,x
         lda     #72
-        ldb     #88
+        ldb     #80
         lbsr    DrawStr
         leax    TGo,pcr
         lda     #40
-        ldb     #120
+        ldb     #112
         lbsr    DrawStr
-        lbsr    PauseRead
+        lbsr    PauseLong       ; keep YOU WIN / LOSE on screen
+        lbsr    KeyFlush
         lbsr    WaitKey
-        lbsr    PauseShort
         rts
 
 ***********************************************************************
@@ -1412,18 +1488,20 @@ cfa1    sta     ,x
         bne     cfa1
         rts
 
+* Empty = hollow box. Miss keeps the box + center splash (not a hull).
+* Hit = X. Ships = solid hull silhouettes (destroyer ≠ miss).
 PatEmpty
         fcb     $FF,$81,$81,$81,$81,$81,$81,$FF
 PatMiss
-        fcb     $00,$00,$18,$3C,$3C,$18,$00,$00
+        fcb     $FF,$81,$99,$A5,$A5,$99,$81,$FF
 PatHit
-        fcb     $81,$42,$24,$18,$18,$24,$42,$81
+        fcb     $FF,$C3,$A5,$99,$99,$A5,$C3,$FF
 PatShip
-        fcb     $00,$3C,$7E,$FF,$FF,$7E,$3C,$18
-        fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18
-        fcb     $00,$00,$3C,$7E,$7E,$3C,$00,$00
-        fcb     $00,$18,$3C,$7E,$3C,$18,$00,$00
-        fcb     $00,$00,$18,$3C,$3C,$18,$00,$00
+        fcb     $00,$3C,$7E,$FF,$FF,$7E,$3C,$18  * 1 carrier
+        fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18  * 2 battleship
+        fcb     $00,$00,$3C,$7E,$7E,$3C,$00,$00  * 3 cruiser
+        fcb     $00,$18,$3C,$7E,$3C,$18,$00,$00  * 4 sub
+        fcb     $00,$00,$7E,$FF,$FF,$7E,$00,$00  * 5 destroyer (bar, not splash)
 
 * X0,Y0 → X = &GFX + Y*32 + X/8
 CellAddrByte
@@ -1812,50 +1890,57 @@ SoundInit
         sta     $FF03
         lda     #$3C
         sta     $FF23
+        lda     #$80
+        sta     $FF20           ; center DAC
         rts
 
-* Re-assert sound path then play (A=0 miss, 1 hit, 2 win/sink)
-* Stack-safe: single pshs/puls frame only.
+* Tone A=0 miss, 1 hit, 2 sink/win — exact structure as hello/beep.asm
+* Short fixed loops only (never hangs). Safe under PMODE 4.
+Tone
 Beep
         pshs    a,b,x
+        * re-enable path every call (graphics can leave PIA odd)
         lda     $FF01
         ora     #$08
         sta     $FF01
         lda     #$3C
         sta     $FF03
         sta     $FF23
-        lda     ,s              ; original A from stack
+        lda     ,s              ; original A (pshs a,b,x → A at ,s)
         tsta
-        beq     bp0
+        beq     tn0
         cmpa    #1
-        beq     bp1
-        ldb     #40
-        ldx     #20
-        bra     bpg
-bp0     ldb     #18
-        ldx     #50
-        bra     bpg
-bp1     ldb     #28
-        ldx     #28
-bpg
-bp_o    lda     #$80
-bp_i    sta     $FF20
+        beq     tn1
+        * sink / win — higher, short fanfare
+        ldb     #12
+        ldx     #18
+        bra     tng
+tn0     ldb     #8              ; miss — lower, short
+        ldx     #40
+        bra     tng
+tn1     ldb     #10             ; hit
+        ldx     #24
+tng     * identical to hello beep.asm core
+tn_o    lda     #$80
+tn_i    sta     $FF20
         eora    #$3F
         sta     $FF20
         pshs    x
-bp_d    leax    -1,x
-        bne     bp_d
+tn_d    leax    -1,x
+        bne     tn_d
         puls    x
         deca
-        bne     bp_i
+        bne     tn_i
         decb
-        bne     bp_o
+        bne     tn_o
+        lda     #$80
+        sta     $FF20
         puls    a,b,x
         rts
 
 Click
         clra
-        lbra    Beep
+        lbra    Tone
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
@@ -1920,13 +2005,19 @@ TScE    fcn     "E:"
 TScY    fcn     " Y:"
 TMHit   fcn     "HIT!"
 TMMiss  fcn     "MISS!"
-TMSunk  fcn     "SUNK!"
+TMSunk  fcn     "SUNK "
 TMAlr   fcn     "ALREADY"
 TMComp  fcn     "COMPUTER"
 TMComp2 fcn     "COMP DONE"
 TWin    fcn     "YOU WIN!"
 TLose   fcn     "YOU LOSE"
+TNCarr  fcn     "CARRIER"
+TNBatt  fcn     "BATTLESHIP"
+TNCrui  fcn     "CRUISER"
+TNSub   fcn     "SUB"
+TNDest  fcn     "DESTROYER"
 TmpCh   zmb     1
+TmpTone zmb     1
 
 ***********************************************************************
 * Variables (in LOADM image)
