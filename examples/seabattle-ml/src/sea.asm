@@ -284,31 +284,22 @@ pp_put
         lda     CurC
         sta     TmpC
         clr     TmpG
-        lbsr    ShipLen         ; → B = SL(ShipId)
+        lbsr    ShipLen
         stb     TmpL
+        lda     TmpL
+        beq     pp_bad
         lbsr    CanPlace
         lda     CP
-        lbeq    pp_bad
-        lda     #0
-        ldb     ShipId
-        lbsr    PlaceShip
+        beq     pp_bad
+        * place without re-entering ShipLen path
+        clr     TmpG
+        lbsr    PlaceShipRaw
         inc     ShipId
-        lda     #1
-        lbsr    Beep
-        lbra    pp_loop
-pp_bad
-        lda     #0
-        lbsr    Beep
-        lbra    pp_in
-pp_auto
-        * Click DAC first (no Beep routine — proves we reached here)
-        lda     #$20
-        sta     DAC
-        eora    #$3F
-        sta     DAC
-        lbsr    AutoPlacePlayer
-        lda     #6
-        sta     ShipId
+        lbsr    Click
+        lda     ShipId
+        cmpa    #6
+        lbhs    pp_done
+        * refresh left board only (faster, safer than full DrawBoardsOnly)
         lda     #0
         sta     BoardWhich
         lda     #LX0
@@ -316,14 +307,20 @@ pp_auto
         lda     #LY0
         sta     BY0
         lbsr    DrawOneBoard
-        lda     #$20
-        sta     DAC
-        rts
-
+        lbsr    DrawCursorLeft
+        lbra    pp_in
+pp_bad
+        lbsr    Click
+        lbra    pp_in
+pp_auto
+        lbsr    Click
+        lbsr    AutoPlacePlayer
+        lda     #6
+        sta     ShipId
+        bra     pp_done
 pp_done
         lbsr    DrawBoardsOnly
-        lda     #1
-        lbsr    Beep
+        lbsr    Click
         rts
 
 DrawPlaceHUD
@@ -349,95 +346,85 @@ PlaceEnemyFleet
         rts
 
 ***********************************************************************
-* Auto-place player fleet: raw stores into PS[10][10] row-major.
-* Rows 0..4, each ship starting at column 0. Cannot hang.
+* Auto-place fleets with variety. Bounded attempts + fixed fallback.
+* A = 0 player (PS), 1 enemy (ES)
 ***********************************************************************
 AutoPlacePlayer
-        ldx     #PS
-        ldb     #100
-app_cl  clr     ,x+
-        decb
-        bne     app_cl
-        * row 0: ship 1 length 5
-        ldx     #PS
-        lda     #1
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        * row 1: ship 2 length 4  (PS+10)
-        ldx     #PS
-        leax    10,x
-        lda     #2
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        * row 2: ship 3 length 3
-        ldx     #PS
-        leax    20,x
-        lda     #3
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        * row 3: ship 4 length 3
-        ldx     #PS
-        leax    30,x
-        lda     #4
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        * row 4: ship 5 length 2
-        ldx     #PS
-        leax    40,x
-        lda     #5
-        sta     ,x+
-        sta     ,x+
-        rts
+        clra
+        bra     AutoPlaceFleet
 
-***********************************************************************
-* Auto-place enemy fleet into ES (mirror of player layout)
-***********************************************************************
 AutoPlaceFleet
-        * A=grid ignored for enemy path when called with 1 from PlaceEnemy
-        * Always fill ES the same way
-        ldx     #ES
-        ldb     #100
-ape_cl  clr     ,x+
+        sta     PlaceGrid
+        * choose base grid
+        tsta
+        bne     ap_es
+        ldx     #PS
+        bra     ap_clr
+ap_es   ldx     #ES
+ap_clr  ldb     #100
+ap_cl1  clr     ,x+
         decb
-        bne     ape_cl
-        ldx     #ES
+        bne     ap_cl1
         lda     #1
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        ldx     #ES
-        leax    10,x
-        lda     #2
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        ldx     #ES
-        leax    20,x
-        lda     #3
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        ldx     #ES
-        leax    30,x
-        lda     #4
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        ldx     #ES
-        leax    40,x
-        lda     #5
-        sta     ,x+
-        sta     ,x+
+        sta     ShipId
+ap_ship lbsr    ShipLen
+        stb     TmpL
+        clr     Tries
+ap_try  inc     Tries
+        lda     Tries
+        cmpa    #50
+        bhi     ap_fb
+        lbsr    Rand
+        anda    #1
+        sta     Horiz
+        * row 1..10
+        lda     #10
+        lbsr    RandN
+        sta     TmpR
+        * col 1..10
+        lda     #10
+        lbsr    RandN
+        sta     TmpC
+        * clamp start so ship fits
+        lda     Horiz
+        beq     ap_vfit
+        lda     #11
+        suba    TmpL            ; max start col
+        cmpa    #1
+        bhs     ap_hc
+        lda     #1
+ap_hc   cmpa    TmpC
+        bhs     ap_go            ; max >= TmpC OK
+        sta     TmpC
+        bra     ap_go
+ap_vfit lda     #11
+        suba    TmpL
+        cmpa    #1
+        bhs     ap_vc
+        lda     #1
+ap_vc   cmpa    TmpR
+        bhs     ap_go
+        sta     TmpR
+ap_go   lda     PlaceGrid
+        sta     TmpG
+        lbsr    CanPlace
+        lda     CP
+        beq     ap_try
+        lbsr    PlaceShipRaw
+        bra     ap_nxt
+ap_fb   * fallback row=ShipId col=1 horizontal (always free on empty rows)
+        lda     ShipId
+        sta     TmpR
+        lda     #1
+        sta     TmpC
+        sta     Horiz
+        lda     PlaceGrid
+        sta     TmpG
+        lbsr    PlaceShipRaw
+ap_nxt  inc     ShipId
+        lda     ShipId
+        cmpa    #6
+        blo     ap_ship
         rts
 
 * ShipId (1..5) → B = length
@@ -1590,49 +1577,79 @@ KChar   fcb     0
 
 * Sound / RNG
 ***********************************************************************
+* CoCo 6-bit DAC path (works with BASIC AUDIO ON from loader)
 SoundInit
-        lda     PIA1CRA
+        lda     $FF01
+        ora     #$08            ; CA2 high — select sound path
+        sta     $FF01
+        lda     $FF03
         ora     #$08
-        sta     PIA1CRA
-        lda     #$3C
-        sta     PIA1CRB
-        sta     PIA2CRB
+        sta     $FF03
+        lda     #$3C            ; CB2 output high
+        sta     $FF23
+        lda     #$02            ; mid DAC level quiet
+        sta     DAC
         rts
 
+* Tiny click — never nests long loops (old Beep could feel like a freeze)
+Click
+        pshs    a,b,x
+        ldb     #20
+ck1     lda     #$3E
+        sta     DAC
+        lda     #$01
+        sta     DAC
+        ldx     #30
+ckd     leax    -1,x
+        bne     ckd
+        decb
+        bne     ck1
+        lda     #$02
+        sta     DAC
+        puls    a,b,x
+        rts
+
+* A=0 low, 1 mid, 2 high — short tones
 Beep
         pshs    a,b,x
         tsta
-        beq     b0
+        beq     bp0
         cmpa    #1
-        beq     b1
-        ldb     #6
-        ldx     #10
-        bra     bg
-b0      ldb     #3
-        ldx     #14
-        bra     bg
-b1      ldb     #5
-        ldx     #11
-bg      lda     #$30
-bi      sta     DAC
-        eora    #$3F
+        beq     bp1
+        ldb     #35             ; high / sink
+        ldx     #12
+        bra     bpg
+bp0     ldb     #12             ; miss
+        ldx     #28
+        bra     bpg
+bp1     ldb     #25             ; hit
+        ldx     #16
+bpg     stb     TmpB
+bp_o    lda     #$20
+bp_i    sta     DAC
+        eora    #$1F
         sta     DAC
         pshs    x
-bd      leax    -1,x
-        bne     bd
+bp_d    leax    -1,x
+        bne     bp_d
         puls    x
         deca
-        bne     bi
-        decb
-        bne     bg
+        bne     bp_i
+        dec     TmpB
+        bne     bp_o
+        lda     #$02
+        sta     DAC
         puls    a,b,x
         rts
 
 SeedRnd
-        lda     $0113
+        lda     $0112
+        eora    $0113
         bne     srok
-        lda     #$5A
+        lda     #$A5
 srok    sta     Rnd
+        eora    #$5A
+        sta     Rnd
         rts
 Rand
         lda     Rnd
