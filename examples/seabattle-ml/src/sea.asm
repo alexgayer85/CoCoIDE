@@ -686,18 +686,29 @@ pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    TinyPause
+        clra
+        lbsr    Beep
+        lbsr    PauseRead
         lbra    pt_i
 pt_msg
-        * X already → message string (HIT!/MISS!/SUNK!)
+        * X → HIT!/MISS!/SUNK!
         pshs    x
         lbsr    ClearMsg
         puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    TinyPause
-        * Do NOT WaitKey / Beep here — return so BattleLoop runs ComputerTurn
+        lda     HT
+        beq     pt_b0
+        cmpa    #3
+        beq     pt_b2
+        lda     #1
+        bra     pt_bb
+pt_b0   clra
+        bra     pt_bb
+pt_b2   lda     #2
+pt_bb   lbsr    Beep
+        lbsr    PauseRead       ; time to read result
         rts
 
 ComputerTurn
@@ -706,9 +717,8 @@ ComputerTurn
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lbsr    TinyPause
+        lbsr    PauseShort
         lbsr    AiPick
-        * clamp AI coords
         lda     AR
         beq     ct_fix
         cmpa    #10
@@ -745,20 +755,26 @@ ct_ac
         ldb     #180
         lbsr    DrawStr
         lda     HT
-        cmpa    #1
-        blo     ct_m
+        beq     ct_m
         cmpa    #3
         beq     ct_s
+        * hit — start hunt
         lda     #1
         sta     Hunt
         lda     AR
         sta     HR
         lda     AC
         sta     HC
+        lda     #1
+        lbsr    Beep
         bra     ct_end
-ct_m    bra     ct_end
+ct_m    clra
+        lbsr    Beep
+        bra     ct_end
 ct_s    clr     Hunt
-ct_end  lbsr    TinyPause
+        lda     #2
+        lbsr    Beep
+ct_end  lbsr    PauseRead
         lbsr    ClearMsg
         rts
 
@@ -777,18 +793,31 @@ cm1     sta     ,x+
         puls    a,b,x
         rts
 
-* ~brief delay; register counter only
-TinyPause
-        pshs    x
-        ldx     #$1000
-tp1     leax    -1,x
-        bne     tp1
-        puls    x
+* Readable pause (~0.8–1.5s on 0.89MHz CoCo)
+PauseRead
+        pshs    a,b,x
+        ldb     #18
+pr0     ldx     #$2800
+pr1     leax    -1,x
+        bne     pr1
+        decb
+        bne     pr0
+        puls    a,b,x
         rts
 PauseShort
-        bra     TinyPause
+        pshs    a,b,x
+        ldb     #6
+ps0     ldx     #$1800
+ps1     leax    -1,x
+        bne     ps1
+        decb
+        bne     ps0
+        puls    a,b,x
+        rts
+TinyPause
+        bra     PauseShort
 PauseMed
-        bra     TinyPause
+        bra     PauseRead
 
 DrawBattleHUD
         leax    TYou,pcr
@@ -930,36 +959,56 @@ csn     inc     CC
         rts
 
 ***********************************************************************
-* AI — linear scan only (no random; cannot hang)
+* AI: hunt neighbors after hit, else random (bounded), else scan
 ***********************************************************************
 AiPick
-        * Prefer neighbors if hunting
         lda     Hunt
-        beq     ai_scan
+        beq     ai_rnd
         lda     HR
-        beq     ai_scan
-        * try N S W E
+        beq     ai_rnd
+        * N
         lda     HR
         deca
         ldb     HC
         lbsr    ai_try
-        bcc     ai_got
+        lbcc    ai_got
+        * S
         lda     HR
         inca
         ldb     HC
         lbsr    ai_try
         bcc     ai_got
+        * W
         lda     HR
         ldb     HC
         decb
         lbsr    ai_try
         bcc     ai_got
+        * E
         lda     HR
         ldb     HC
         incb
         lbsr    ai_try
         bcc     ai_got
         clr     Hunt
+ai_rnd  clr     Tries
+ai_rl   inc     Tries
+        lda     Tries
+        cmpa    #60
+        bhi     ai_scan
+        lda     #10
+        lbsr    RandN
+        sta     AR
+        lda     #10
+        lbsr    RandN
+        sta     AC
+        ldx     #AK
+        lda     AR
+        ldb     AC
+        lbsr    CellAddr
+        lda     ,x
+        bne     ai_rl           ; already tried
+        rts
 ai_scan lda     #1
         sta     AR
 ais_r   lda     #1
@@ -969,7 +1018,7 @@ ais_c   ldx     #AK
         ldb     AC
         lbsr    CellAddr
         lda     ,x
-        beq     ai_got          ; empty → take it (AR/AC already set)
+        beq     ai_got
         inc     AC
         lda     AC
         cmpa    #11
@@ -983,7 +1032,7 @@ ais_c   ldx     #AK
         sta     AC
 ai_got  rts
 
-* A=row B=col → if valid empty on AK, set AR/AC and clear carry; else set carry
+* A=row B=col → empty on AK? set AR/AC, clear C; else set C
 ai_try
         tsta
         beq     ait_bad
@@ -993,19 +1042,20 @@ ai_try
         beq     ait_bad
         cmpb    #10
         bhi     ait_bad
+        pshs    a,b
         sta     RR
         stb     CC
         ldx     #AK
         lbsr    CellAddr
         lda     ,x
-        bne     ait_bad
-        lda     RR
+        bne     ait_b2
+        puls    a,b
         sta     AR
-        lda     CC
-        sta     AC
-        andcc   #$FE            ; clear C = success
+        stb     AC
+        andcc   #$FE
         rts
-ait_bad orcc    #$01            ; set C = fail
+ait_b2  puls    a,b
+ait_bad orcc    #$01
         rts
 
 ***********************************************************************
@@ -1016,12 +1066,23 @@ GameOver
         lda     EH
         bne     gol
         leax    TWin,pcr
+        lda     #2
         bra     gow
 gol     leax    TLose,pcr
-gow     lda     #80
-        ldb     #100
+        clra
+gow     pshs    x
+        lbsr    Beep
+        puls    x
+        lda     #72
+        ldb     #88
         lbsr    DrawStr
+        leax    TGo,pcr
+        lda     #40
+        ldb     #120
+        lbsr    DrawStr
+        lbsr    PauseRead
         lbsr    WaitKey
+        lbsr    PauseShort
         rts
 
 ***********************************************************************
@@ -1575,72 +1636,62 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG
+* Sound / RNG — same DAC path as examples/hello beep.asm
 ***********************************************************************
-* CoCo 6-bit DAC path (works with BASIC AUDIO ON from loader)
 SoundInit
         lda     $FF01
-        ora     #$08            ; CA2 high — select sound path
-        sta     $FF01
-        lda     $FF03
         ora     #$08
+        sta     $FF01
+        lda     #$3C
         sta     $FF03
-        lda     #$3C            ; CB2 output high
+        lda     #$3C
         sta     $FF23
-        lda     #$02            ; mid DAC level quiet
-        sta     DAC
         rts
 
-* Tiny click — never nests long loops (old Beep could feel like a freeze)
-Click
-        pshs    a,b,x
-        ldb     #20
-ck1     lda     #$3E
-        sta     DAC
-        lda     #$01
-        sta     DAC
-        ldx     #30
-ckd     leax    -1,x
-        bne     ckd
-        decb
-        bne     ck1
-        lda     #$02
-        sta     DAC
-        puls    a,b,x
-        rts
-
-* A=0 low, 1 mid, 2 high — short tones
+* Re-assert sound path then play (A=0 miss, 1 hit, 2 win/sink)
 Beep
         pshs    a,b,x
+        * re-init mux each time (graphics mode can leave PIA odd)
+        lda     $FF01
+        ora     #$08
+        sta     $FF01
+        lda     #$3C
+        sta     $FF03
+        sta     $FF23
+        puls    a
+        pshs    a
         tsta
         beq     bp0
         cmpa    #1
         beq     bp1
-        ldb     #35             ; high / sink
-        ldx     #12
+        ldb     #40             ; sink / win
+        ldx     #20
         bra     bpg
-bp0     ldb     #12             ; miss
+bp0     ldb     #18             ; miss — lower, longer
+        ldx     #50
+        bra     bpg
+bp1     ldb     #28             ; hit
         ldx     #28
-        bra     bpg
-bp1     ldb     #25             ; hit
-        ldx     #16
-bpg     stb     TmpB
-bp_o    lda     #$20
-bp_i    sta     DAC
-        eora    #$1F
-        sta     DAC
+bpg     * same structure as hello/beep.asm
+bp_o    lda     #$80
+bp_i    sta     $FF20
+        eora    #$3F
+        sta     $FF20
         pshs    x
 bp_d    leax    -1,x
         bne     bp_d
         puls    x
         deca
         bne     bp_i
-        dec     TmpB
+        decb
         bne     bp_o
-        lda     #$02
-        sta     DAC
-        puls    a,b,x
+        puls    a
+        puls    b,x
         rts
+
+Click
+        clra
+        lbra    Beep
 
 SeedRnd
         lda     $0112
@@ -1762,5 +1813,8 @@ RowN    zmb     1
 HT      zmb     1
 SID     zmb     1
 CP      zmb     1
+
+        end     START
+     zmb     1
 
         end     START
