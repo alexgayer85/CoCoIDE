@@ -110,7 +110,18 @@ c1      clr     ,x+
 ***********************************************************************
 TitleScreen
         lbsr    BlitSplash
-        * dark bar so prompt is readable on busy art
+        * dark bar so text is readable on busy art
+        lda     #176
+        ldb     #16
+        lbsr    ClearRows
+        * short copyright credit first
+        leax    TCopy,pcr
+        lda     #48             ; ~center "(C) Alex Gayer 2026"
+        ldb     #180
+        lbsr    DrawStr
+        lbsr    PauseLong
+        lbsr    PauseMed
+        * then prompt for key
         lda     #176
         ldb     #16
         lbsr    ClearRows
@@ -2054,6 +2065,7 @@ TSub    fcn     "DUAL BOARD DUEL"
 TCtrl   fcn     "WASD MOVE  R ROTATE"
 TCtrl2  fcn     "SPACE PUT  P AUTO"
 TGo     fcn     "PRESS ANY KEY"
+TCopy   fcn     "(C) ALEX GAYER 2026"
 TPlace  fcn     "PLACE FLEET"
 TShip   fcn     "SHIP"
 THV     fcn     ""
