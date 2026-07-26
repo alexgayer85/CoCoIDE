@@ -591,30 +591,31 @@ afl4    tfr     u,x
         sta     56,x
         lbra    af_done
 
-* 5: center cross
+* 5: mid band (was a broken "cross" — battleship skipped over carrier
+*     and ship4 was an L at 8/9/18). All straight, no overlaps.
 afl5    tfr     u,x
-        lda     #1
+        lda     #1              ; carrier row4 cols0-4
+        sta     40,x
+        sta     41,x
         sta     42,x
         sta     43,x
         sta     44,x
-        sta     45,x
-        sta     46,x
-        lda     #2
-        sta     14,x
-        sta     24,x
-        sta     34,x
-        sta     54,x
-        lda     #3
+        lda     #2              ; battleship col6 rows0-3
+        sta     6,x
+        sta     16,x
+        sta     26,x
+        sta     36,x
+        lda     #3              ; cruiser row6 cols0-2
         sta     60,x
         sta     61,x
         sta     62,x
-        lda     #4
-        sta     8,x
-        sta     9,x
-        sta     18,x
-        lda     #5
-        sta     90,x
-        sta     91,x
+        lda     #4              ; sub row8 cols5-7
+        sta     85,x
+        sta     86,x
+        sta     87,x
+        lda     #5              ; destroyer row2 cols8-9
+        sta     28,x
+        sta     29,x
         lbra    af_done
 
 * 6: right edge wall + bottom
