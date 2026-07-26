@@ -91,6 +91,9 @@ InitGame
         clr     Hunt
         clr     HR
         clr     HC
+        clr     H0R
+        clr     H0C
+        clr     HD
         lda     #1
         sta     CurR
         sta     CurC
@@ -1122,23 +1125,62 @@ ct_ac
         beq     ct_m
         cmpa    #3
         beq     ct_s
+        * HIT — start or extend hunt
+        lda     Hunt
+        bne     ct_h2
+        * first hit on a ship
         lda     #1
         sta     Hunt
+        clr     HD              ; no axis yet
         lda     AR
         sta     HR
+        sta     H0R
         lda     AC
         sta     HC
-        leax    TMCht,pcr
+        sta     H0C
+        bra     ct_hm
+ct_h2   * another hit while hunting
+        lda     HD
+        bne     ct_h3
+        * establish direction from first hit → this hit
+        lda     AR
+        cmpa    H0R
+        beq     ct_hz
+        blo     ct_hn
+        lda     #2              ; south
+        bra     ct_hs
+ct_hn   lda     #1              ; north
+        bra     ct_hs
+ct_hz   lda     AC
+        cmpa    H0C
+        blo     ct_hw
+        lda     #4              ; east
+        bra     ct_hs
+ct_hw   lda     #3              ; west
+ct_hs   sta     HD
+ct_h3   lda     #2
+        sta     Hunt            ; line mode
+        lda     AR
+        sta     HR              ; tip = latest hit
+        lda     AC
+        sta     HC
+ct_hm   leax    TMCht,pcr
         lbsr    ShowMsg
         lda     #1
         lbsr    Tone
         bra     ct_end
-ct_m    leax    TMCms,pcr
+ct_m    * MISS — if lining a ship, reverse and work the other end
+        lda     Hunt
+        cmpa    #2
+        bne     ct_m1
+        lbsr    AiRevDir        ; flip HD, tip back to H0
+ct_m1   leax    TMCms,pcr
         lbsr    ShowMsg
         clra
         lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
+        clr     HD
         lbsr    MsgSunk
         lda     #2
         lbsr    Tone
@@ -1389,14 +1431,62 @@ csn     inc     CC
         rts
 
 ***********************************************************************
-* AI: hunt after hit, else pseudo-random from Rnd, else scan.
-* Try counter in B only (BSS Tries was unsafe).
+* AI — hunt/line follow after hits; parity search otherwise.
+* Hunt: 0 search  1 neighbors of first hit  2 extend along HD
+* HD: 0 none  1 N  2 S  3 W  4 E
+* H0R/H0C = first hit on ship; HR/HC = current tip
 ***********************************************************************
 AiPick
         lda     Hunt
-        beq     ai_rnd
+        lbeq    ai_search
+        cmpa    #2
+        beq     ai_line
+        * Hunt==1: ring around first hit
+        bra     ai_ring
+
+* Extend in established direction from tip; if blocked, reverse from H0
+ai_line lda     HD
+        beq     ai_ring
         lda     HR
-        beq     ai_rnd
+        ldb     HC
+        lbsr    AiStep
+        lbsr    ai_try
+        lbcc    ai_got
+        * reverse and shoot from original hit the other way
+        lbsr    AiRevDir
+        lda     H0R
+        sta     HR
+        lda     H0C
+        sta     HC
+        lda     HR
+        ldb     HC
+        lbsr    AiStep
+        lbsr    ai_try
+        lbcc    ai_got
+        * fall back to ring around first hit
+        lda     #1
+        sta     Hunt
+ai_ring lda     H0R
+        deca
+        ldb     H0C
+        lbsr    ai_try
+        lbcc    ai_got
+        lda     H0R
+        inca
+        ldb     H0C
+        lbsr    ai_try
+        lbcc    ai_got
+        lda     H0R
+        ldb     H0C
+        decb
+        lbsr    ai_try
+        lbcc    ai_got
+        lda     H0R
+        ldb     H0C
+        incb
+        lbsr    ai_try
+        lbcc    ai_got
+        * also neighbors of tip (in case first-hit ring exhausted)
         lda     HR
         deca
         ldb     HC
@@ -1418,7 +1508,11 @@ AiPick
         lbsr    ai_try
         lbcc    ai_got
         clr     Hunt
-ai_rnd  ldb     #40             ; max random tries (register!)
+        clr     HD
+
+* Search: prefer checkerboard (r+c even) so min shots to find ships
+ai_search
+        ldb     #50
 ai_rl   pshs    b
         lbsr    Rand
         anda    #$0F
@@ -1432,22 +1526,53 @@ ai_r1   sta     AR
         beq     ai_cz
         cmpa    #10
         bls     ai_c1
-ai_cz   lda     #5
+ai_cz   lda     #1
 ai_c1   sta     AC
+        * parity: (R+C) even only
+        lda     AR
+        adda    AC
+        anda    #1
+        bne     ai_skip
         ldx     #AK
         lda     AR
         ldb     AC
         lbsr    CellAddr
         lda     ,x
         puls    b
-        beq     ai_got          ; empty cell — AR/AC set
-        decb
+        beq     ai_got
+        bra     ai_dec
+ai_skip puls    b
+ai_dec  decb
         bne     ai_rl
+* linear scan: even parity first, then any empty
 ai_scan lda     #1
         sta     AR
 ais_r   lda     #1
         sta     AC
-ais_c   ldx     #AK
+ais_c   lda     AR
+        adda    AC
+        anda    #1
+        bne     ais_n
+        ldx     #AK
+        lda     AR
+        ldb     AC
+        lbsr    CellAddr
+        lda     ,x
+        beq     ai_got
+ais_n   inc     AC
+        lda     AC
+        cmpa    #11
+        blo     ais_c
+        inc     AR
+        lda     AR
+        cmpa    #11
+        blo     ais_r
+* any remaining empty
+        lda     #1
+        sta     AR
+ai2_r   lda     #1
+        sta     AC
+ai2_c   ldx     #AK
         lda     AR
         ldb     AC
         lbsr    CellAddr
@@ -1456,16 +1581,17 @@ ais_c   ldx     #AK
         inc     AC
         lda     AC
         cmpa    #11
-        blo     ais_c
+        blo     ai2_c
         inc     AR
         lda     AR
         cmpa    #11
-        blo     ais_r
+        blo     ai2_r
         lda     #1
         sta     AR
         sta     AC
 ai_got  rts
 
+* A=row B=col → empty on AK? set AR/AC, clear C; else set C
 ai_try
         tsta
         beq     ait_bad
@@ -1489,6 +1615,60 @@ ai_try
         rts
 ait_b2  puls    a,b
 ait_bad orcc    #$01
+        rts
+
+* A=row B=col, HD=dir → step one cell; result in A,B
+AiStep
+        pshs    a               ; save row
+        lda     HD
+        cmpa    #1
+        beq     as_n
+        cmpa    #2
+        beq     as_s
+        cmpa    #3
+        beq     as_w
+        cmpa    #4
+        beq     as_e
+        puls    a
+        rts
+as_n    puls    a
+        deca
+        rts
+as_s    puls    a
+        inca
+        rts
+as_w    puls    a
+        decb
+        rts
+as_e    puls    a
+        incb
+        rts
+
+* Reverse HD (1↔2, 3↔4); tip = first hit
+AiRevDir
+        lda     HD
+        cmpa    #1
+        bne     ar1
+        lda     #2
+        bra     ars
+ar1     cmpa    #2
+        bne     ar2
+        lda     #1
+        bra     ars
+ar2     cmpa    #3
+        bne     ar3
+        lda     #4
+        bra     ars
+ar3     cmpa    #4
+        bne     ar4
+        lda     #3
+        bra     ars
+ar4     rts
+ars     sta     HD
+        lda     H0R
+        sta     HR
+        lda     H0C
+        sta     HC
         rts
 
 ***********************************************************************
@@ -2127,100 +2307,119 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG
-*
-* Tepolt Ch.10: DAC is $FF20 (PA7-PA2). Mux select is PIA1 ($FF01/$FF03) =
-* keyboard — never touch those (freezes input). main.bas AUDIO ON already
-* selects the DAC → TV path. We only stream samples to $FF20.
-*
-* A=0 splash (white noise)  A=1 hit boom  A=2+ sink boom
-* Dense sample loops so it is a hiss/thump, not one pop per half-second.
+* Sound / RNG — PB1 PIA2 only (worked before); dense loops = hiss/thump
+* never $FF01/$FF03. A=0 splash  1 hit  2+ sink
 ***********************************************************************
 SoundInit
-        lda     #$80
-        sta     $FF20           ; mid DAC
+        pshs    a
+        lda     $FF23
+        anda    #$FB
+        sta     $FF23
+        lda     $FF22
+        ora     #$02
+        sta     $FF22
+        lda     $FF23
+        ora     #$04
+        sta     $FF23
+        puls    a
         rts
 
 Tone
         pshs    cc,a,b,x,y
         orcc    #$50
-        lda     1,s             ; A after pshs cc,a,b,x,y
+        lda     $FF23
+        sta     Sv23
+        lda     $FF22
+        sta     Sv22
+        lda     $FF23
+        anda    #$FB
+        sta     $FF23
+        lda     $FF22
+        ora     #$02
+        sta     $FF22
+        lda     Sv23
+        ora     #$04
+        sta     $FF23
+        lda     1,s
         tsta
-        beq     SndSplash
+        beq     sn_spl
         cmpa    #1
-        beq     SndBoom
-        * sink
-        ldx     #$0280          ; longer noise
-        bsr     DacNoise
-        ldy     #20             ; half-period start
-        ldb     #48
-        bsr     DacDive
-        bra     SndDone
-
-SndBoom ldx     #$0120
-        bsr     DacNoise
-        ldy     #12
-        ldb     #36
-        bsr     DacDive
-        bra     SndDone
-
-SndSplash
-        ldx     #$0200          ; ~dense white noise splash
-        bsr     DacNoise
-        * soft low drip
-        ldy     #40
-        ldb     #8
-        bsr     DacDive
-
-SndDone lda     #$80
-        sta     $FF20
+        beq     sn_hit
+        * sink — longer
+        ldx     #$01C0
+        bsr     PbNoise
+        ldy     #10
+        ldb     #40
+        bsr     PbDive
+        bra     sn_x
+sn_hit  ldx     #$00C0
+        bsr     PbNoise
+        ldy     #6
+        ldb     #30
+        bsr     PbDive
+        bra     sn_x
+sn_spl  ldx     #$0140          ; splash hiss
+        bsr     PbNoise
+sn_x    lda     Sv22
+        sta     $FF22
+        lda     Sv23
+        sta     $FF23
         puls    cc,a,b,x,y
         rts
 
-* X = sample count (>0). Write LFSR bits to DAC as fast as possible.
-DacNoise
-dn_lp   lda     Rnd
-        bne     dn_r
+* X samples: random-rate PB1 toggles (dense white-ish noise)
+PbNoise
+pn_lp   lda     Rnd
+        bne     pn_r
         lda     #$A5
-dn_r    lsra
-        bcc     dn_o
+pn_r    lsra
+        bcc     pn_o
         eora    #$B4
-dn_o    sta     Rnd
-        lsla                    ; align into PA7-PA2 (DAC)
-        lsla
-        sta     $FF20
-        * tiny settle (keeps sample rate in audible band, not 1 click)
-        nop
-        nop
+pn_o    sta     Rnd
+        lda     $FF22
+        eora    #$02
+        sta     $FF22
+        * delay 2..5 only — high frequency hash
+        lda     Rnd
+        anda    #3
+        adda    #2
+        tfr     a,y
+pn_d    leay    -1,y
+        bne     pn_d
         leax    -1,x
-        bne     dn_lp
+        bne     pn_lp
         rts
 
-* Square-wave pitch dive on DAC. Y=half-period (>=1), B=steps.
-DacDive
-dd_lp   lda     #$FC            ; high
-        sta     $FF20
+* Y=start half-period, B=steps — falling square on PB1
+PbDive
+pd_lp   lda     $FF22
+        eora    #$02
+        sta     $FF22
         tfr     y,x
-        bne     dd_h
+        bne     pd_1
         ldx     #1
-dd_h    leax    -1,x
-        bne     dd_h
-        clra                    ; low
-        sta     $FF20
+pd_1    leax    -1,x
+        bne     pd_1
+        lda     $FF22
+        eora    #$02
+        sta     $FF22
         tfr     y,x
-        bne     dd_l
+        bne     pd_2
         ldx     #1
-dd_l    leax    -1,x
-        bne     dd_l
-        leay    3,y             ; longer period → lower pitch
+pd_2    leax    -1,x
+        bne     pd_2
+        leay    2,y
         decb
-        bne     dd_lp
+        bne     pd_lp
         rts
 
 Beep
         lbra    Tone
 Click
         rts
+
+Sv22    fcb     0
+Sv23    fcb     0
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
@@ -2328,6 +2527,9 @@ EH      zmb     1
 Hunt    zmb     1
 HR      zmb     1
 HC      zmb     1
+H0R     zmb     1
+H0C     zmb     1
+HD      zmb     1
 AR      zmb     1
 AC      zmb     1
 CurR    zmb     1
