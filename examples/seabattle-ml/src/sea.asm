@@ -105,23 +105,21 @@ c1      clr     ,x+
         rts
 
 ***********************************************************************
-* Title — main.bas LOADM"NAVAL" already painted $0E00 before EXEC.
-* Do NOT re-blit the 6K frame here (byte copy felt like a long pause
-* before the copyright line). Only overlay the bottom bar text.
+* Title — main.bas does LOADM"SEA" then LOADM"NAVAL" then EXEC.
+* NAVAL is last so the art is already on $0E00 when we start; we only
+* draw the bottom bar (no 6K blit). SEA no longer embeds the splash.
 ***********************************************************************
 TitleScreen
-        * dark bar so text is readable on busy art (image already on screen)
+        * dark bar so text is readable on busy art
         lda     #176
         ldb     #16
         lbsr    ClearRows
-        * short copyright credit first (immediate — no image re-copy)
         leax    TCopy,pcr
-        lda     #48             ; ~center "(C) Alex Gayer 2026"
+        lda     #48
         ldb     #180
         lbsr    DrawStr
         lbsr    PauseLong
         lbsr    PauseMed
-        * then prompt for key
         lda     #176
         ldb     #16
         lbsr    ClearRows
@@ -2094,14 +2092,8 @@ TmpCh   zmb     1
 TmpTone zmb     1
 
 ***********************************************************************
-* Full-screen title splash — raw PMODE 4 page (256×192 / 8 = 6144 bytes)
-* Assembled from src/naval_pmode4.bin (cwd = src/ when CoCoIDE runs lwasm).
-***********************************************************************
-Splash
-        includebin naval_pmode4.bin
-
-***********************************************************************
 * Variables (in LOADM image)
+* (Title splash is separate NAVAL.BIN → $0E00, not embedded here.)
 ***********************************************************************
 PS      zmb     100
 ES      zmb     100

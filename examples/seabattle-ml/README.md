@@ -53,10 +53,10 @@ After a result message, press a key to continue.
 
 | File | Role |
 |------|------|
-| `src/main.bas` | Loader: `PMODE4` → `LOADM"NAVAL"` → `LOADM"SEA"` → `EXEC` |
-| `src/naval.asm` | Splash LOADM image → **`$0E00`** (full PMODE 4 page) |
-| `src/naval_pmode4.bin` | Raw **6144-byte** PMODE 4 framebuffer (included by `naval.asm` + embedded fallback in `sea.asm`) |
-| `src/sea.asm` | Game ML at **`$3F00`** |
+| `src/main.bas` | Loader: `LOADM"SEA"` then `LOADM"NAVAL"` then `EXEC` (art last = no wait on splash) |
+| `src/naval.asm` | Splash LOADM image → **`$0E00`** (full PMODE 4 page, 6144 bytes) |
+| `src/naval_pmode4.bin` | Raw **6144-byte** PMODE 4 framebuffer (only in NAVAL.BIN, not in SEA) |
+| `src/sea.asm` | Game ML at **`$3F00`** (no embedded splash) |
 
 Replace the splash by overwriting `src/naval_pmode4.bin` (exactly 6144 bytes) and rebuilding.
 
