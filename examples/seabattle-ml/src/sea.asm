@@ -295,7 +295,6 @@ pp_put
         clr     TmpG
         lbsr    PlaceShipRaw
         inc     ShipId
-        lbsr    Click
         lda     ShipId
         cmpa    #6
         lbhs    pp_done
@@ -310,14 +309,13 @@ pp_put
         lbsr    DrawCursorLeft
         lbra    pp_in
 pp_bad
-        lbsr    Click
+        * no Click/Tone here — sound path must not run during place
         lbra    pp_in
 pp_auto
+        * NO Tone/Click/Beep — PIA re-init in Tone broke keyboard after P
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
-        lda     #1
-        lbsr    Tone            ; short confirm
 pp_done
         lbsr    DrawBoardsOnly
         rts
@@ -1880,47 +1878,36 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG — same DAC path as examples/hello beep.asm
+* Sound / RNG
+* AUDIO ON in main.bas sets the mux once. Do NOT rewrite $FF01/$FF03
+* during play — those are PIA0 (keyboard); forcing $3C hung input after P.
 ***********************************************************************
 SoundInit
-        lda     $FF01
-        ora     #$08
-        sta     $FF01
-        lda     #$3C
-        sta     $FF03
+        * PIA1 only + center DAC (keyboard PIA0 left alone)
         lda     #$3C
         sta     $FF23
         lda     #$80
-        sta     $FF20           ; center DAC
+        sta     $FF20
         rts
 
-* Tone A=0 miss, 1 hit, 2 sink/win — exact structure as hello/beep.asm
-* Short fixed loops only (never hangs). Safe under PMODE 4.
+* Tone A=0 miss, 1 hit, 2 sink/win — DAC $FF20 only, fixed short loops
 Tone
 Beep
         pshs    a,b,x
-        * re-enable path every call (graphics can leave PIA odd)
-        lda     $FF01
-        ora     #$08
-        sta     $FF01
-        lda     #$3C
-        sta     $FF03
-        sta     $FF23
-        lda     ,s              ; original A (pshs a,b,x → A at ,s)
+        lda     ,s              ; original A (top of pshs a,b,x)
         tsta
         beq     tn0
         cmpa    #1
         beq     tn1
-        * sink / win — higher, short fanfare
-        ldb     #12
-        ldx     #18
+        ldb     #10             ; sink/win
+        ldx     #16
         bra     tng
-tn0     ldb     #8              ; miss — lower, short
-        ldx     #40
+tn0     ldb     #6              ; miss
+        ldx     #36
         bra     tng
-tn1     ldb     #10             ; hit
-        ldx     #24
-tng     * identical to hello beep.asm core
+tn1     ldb     #8              ; hit
+        ldx     #22
+tng
 tn_o    lda     #$80
 tn_i    sta     $FF20
         eora    #$3F
@@ -1939,8 +1926,7 @@ tn_d    leax    -1,x
         rts
 
 Click
-        clra
-        lbra    Tone
+        rts                     ; silent — never touch sound from place UI
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
