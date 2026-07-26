@@ -209,21 +209,25 @@ InstructScreen
 PlacePlayerFleet
         lda     #1
         sta     ShipId
-        clr     Horiz           ; 0=vert 1=horiz
+        lda     #1
+        sta     Horiz           ; start horizontal (whole ship visible)
+        lda     #1
+        sta     CurR
+        sta     CurC
 pp_loop
         lda     ShipId
         cmpa    #6
         lbhs    pp_done
 pp_draw
-        lbsr    DrawBoardsOnly  ; no battle labels (avoids overlap)
+        lbsr    DrawBoardsOnly
         lbsr    DrawPlaceHUD
         lbsr    DrawScores
-        lbsr    DrawCursorLeft
+        lbsr    ClampShip
+        lbsr    DrawGhostShip   ; full ship preview at cursor
 pp_in
         lbsr    WaitKey
         tsta
         lbeq    pp_in
-        * WASD movement (A = left, NOT auto)
         cmpa    #'D
         lbeq    pp_r
         cmpa    #'d
@@ -240,7 +244,6 @@ pp_in
         lbeq    pp_u
         cmpa    #'w
         lbeq    pp_u
-        * extras
         cmpa    #'L
         lbeq    pp_r
         cmpa    #'l
@@ -257,21 +260,21 @@ pp_in
         lbeq    pp_dn
         cmpa    #'k
         lbeq    pp_dn
-        cmpa    #9              ; right arrow
+        cmpa    #9
         lbeq    pp_r
-        cmpa    #8              ; left arrow / BS
+        cmpa    #8
         lbeq    pp_l
-        cmpa    #10             ; down arrow
+        cmpa    #10
         lbeq    pp_dn
-        cmpa    #94             ; up arrow (common CoCo / XRoar)
+        cmpa    #94
         lbeq    pp_u
-        cmpa    #12             ; up alt
+        cmpa    #12
         lbeq    pp_u
-        cmpa    #11             ; up alt
+        cmpa    #11
         lbeq    pp_u
-        cmpa    #30             ; up alt
+        cmpa    #30
         lbeq    pp_u
-        cmpa    #28             ; up alt
+        cmpa    #28
         lbeq    pp_u
         cmpa    #'^
         lbeq    pp_u
@@ -285,53 +288,51 @@ pp_in
         lbeq    pp_auto
         cmpa    #'0
         lbeq    pp_auto
-        cmpa    #'1
-        lbeq    pp_auto
-        cmpa    #'U
-        lbeq    pp_auto
-        cmpa    #'u
-        lbeq    pp_auto
         cmpa    #32
         lbeq    pp_put
         cmpa    #13
         lbeq    pp_put
         lbra    pp_in
 pp_rot
+        lbsr    UndrawGhostShip
         lda     Horiz
         eora    #1
         sta     Horiz
-        lbra    pp_draw
-pp_r    lda     CurC
+        lbsr    ClampShip
+        lbsr    DrawGhostShip
+        lbsr    DrawPlaceHUD    ; refresh HORIZ/VERT label
+        lbra    pp_in
+pp_r    lbsr    UndrawGhostShip
+        lda     CurC
         cmpa    #10
-        lbhs    pp_in
-        lbsr    UndrawCursorLeft
+        bhs     pp_rm
         inc     CurC
-        lbsr    ClampCur
-        lbsr    DrawCursorLeft
+pp_rm   lbsr    ClampShip
+        lbsr    DrawGhostShip
         lbra    pp_in
-pp_l    lda     CurC
+pp_l    lbsr    UndrawGhostShip
+        lda     CurC
         cmpa    #1
-        lbls    pp_in
-        lbsr    UndrawCursorLeft
+        bls     pp_lm
         dec     CurC
-        lbsr    ClampCur
-        lbsr    DrawCursorLeft
+pp_lm   lbsr    ClampShip
+        lbsr    DrawGhostShip
         lbra    pp_in
-pp_dn   lda     CurR
+pp_dn   lbsr    UndrawGhostShip
+        lda     CurR
         cmpa    #10
-        lbhs    pp_in
-        lbsr    UndrawCursorLeft
+        bhs     pp_dm
         inc     CurR
-        lbsr    ClampCur
-        lbsr    DrawCursorLeft
+pp_dm   lbsr    ClampShip
+        lbsr    DrawGhostShip
         lbra    pp_in
-pp_u    lda     CurR
+pp_u    lbsr    UndrawGhostShip
+        lda     CurR
         cmpa    #1
-        lbls    pp_in
-        lbsr    UndrawCursorLeft
+        bls     pp_um
         dec     CurR
-        lbsr    ClampCur
-        lbsr    DrawCursorLeft
+pp_um   lbsr    ClampShip
+        lbsr    DrawGhostShip
         lbra    pp_in
 
 ClampCur
@@ -350,6 +351,99 @@ cc3     cmpa    #10
         lda     #10
 cc4     sta     CurC
         rts
+
+* Keep whole ship (length TmpL / ShipId) on the 10x10 board
+ClampShip
+        pshs    a,b
+        lbsr    ShipLen
+        stb     TmpL
+        lbsr    ClampCur
+        tst     Horiz
+        beq     cs_v
+        lda     CurC
+        adda    TmpL
+        deca
+        cmpa    #10
+        bls     cs_x
+        lda     #11
+        suba    TmpL
+        sta     CurC
+        bra     cs_x
+cs_v    lda     CurR
+        adda    TmpL
+        deca
+        cmpa    #10
+        bls     cs_x
+        lda     #11
+        suba    TmpL
+        sta     CurR
+cs_x    puls    a,b
+        rts
+
+***********************************************************************
+* Ghost ship: draw/erase full ship footprint during placement.
+* Checker pattern = preview; placed ships use solid hull art.
+***********************************************************************
+DrawGhostShip
+        pshs    a,b,x
+        lda     #0
+        sta     BoardWhich
+        lda     #LX0
+        sta     BX0
+        lda     #LY0
+        sta     BY0
+        lbsr    ShipLen
+        stb     TmpL
+        clr     TmpI
+dgs_l   lda     TmpI
+        cmpa    TmpL
+        bhs     dgs_x
+        lda     CurR
+        ldb     CurC
+        tst     Horiz
+        beq     dgs_v
+        addb    TmpI
+        bra     dgs_b
+dgs_v   adda    TmpI
+dgs_b   sta     RR
+        stb     CC
+        lbsr    CellOrigin
+        leax    PatGhost,pcr
+        lbsr    CellBlit
+        inc     TmpI
+        bra     dgs_l
+dgs_x   puls    a,b,x
+        rts
+
+UndrawGhostShip
+        pshs    a,b,x
+        lda     #0
+        sta     BoardWhich
+        lda     #LX0
+        sta     BX0
+        lda     #LY0
+        sta     BY0
+        lbsr    ShipLen
+        stb     TmpL
+        clr     TmpI
+ugs_l   lda     TmpI
+        cmpa    TmpL
+        bhs     ugs_x
+        lda     CurR
+        ldb     CurC
+        tst     Horiz
+        beq     ugs_v
+        addb    TmpI
+        bra     ugs_b
+ugs_v   adda    TmpI
+ugs_b   sta     RR
+        stb     CC
+        lbsr    DrawOneCell     ; restore water / placed ships
+        inc     TmpI
+        bra     ugs_l
+ugs_x   puls    a,b,x
+        rts
+
 pp_put
         lda     CurR
         sta     TmpR
@@ -363,28 +457,20 @@ pp_put
         lbsr    CanPlace
         lda     CP
         beq     pp_bad
-        * place without re-entering ShipLen path
         clr     TmpG
         lbsr    PlaceShipRaw
         inc     ShipId
         lda     ShipId
         cmpa    #6
         lbhs    pp_done
-        * refresh left board only (faster, safer than full DrawBoardsOnly)
-        lda     #0
-        sta     BoardWhich
-        lda     #LX0
-        sta     BX0
-        lda     #LY0
-        sta     BY0
-        lbsr    DrawOneBoard
-        lbsr    DrawCursorLeft
-        lbra    pp_in
+        * next ship: full redraw + new ghost
+        lda     #1
+        sta     CurR
+        sta     CurC
+        lbra    pp_draw
 pp_bad
-        * no Click/Tone here — sound path must not run during place
         lbra    pp_in
 pp_auto
-        * NO Tone/Click/Beep — PIA re-init in Tone broke keyboard after P
         lbsr    AutoPlacePlayer
         lda     #6
         sta     ShipId
@@ -393,14 +479,45 @@ pp_done
         rts
 
 DrawPlaceHUD
-        * top banner only (y=2..16) — not over boards at y=24
+        * y=2 title, y=12 ship+orient, y=... hints kept short
         leax    TPlace,pcr
         lda     #8
         ldb     #2
         lbsr    DrawStr
+        * current craft name
+        lda     ShipId
+        cmpa    #1
+        beq     dph1
+        cmpa    #2
+        beq     dph2
+        cmpa    #3
+        beq     dph3
+        cmpa    #4
+        beq     dph4
+        leax    TNDest,pcr
+        bra     dphn
+dph1    leax    TNCarr,pcr
+        bra     dphn
+dph2    leax    TNBatt,pcr
+        bra     dphn
+dph3    leax    TNCrui,pcr
+        bra     dphn
+dph4    leax    TNSub,pcr
+dphn    lda     #8
+        ldb     #12
+        lbsr    DrawStr
+        * orientation
+        tst     Horiz
+        beq     dphv
+        leax    TH,pcr
+        bra     dpho
+dphv    leax    TV,pcr
+dpho    lda     #120
+        ldb     #12
+        lbsr    DrawStr
         leax    THint,pcr
         lda     #8
-        ldb     #12
+        ldb     #180            ; status band (below scores)
         lbsr    DrawStr
         rts
 
@@ -1601,6 +1718,8 @@ PatMiss
         fcb     $00,$3C,$66,$42,$42,$66,$3C,$00  * open O / splash
 PatHit
         fcb     $C3,$E7,$7E,$3C,$3C,$7E,$E7,$C3  * bold X
+PatGhost
+        fcb     $AA,$55,$AA,$55,$AA,$55,$AA,$55  * placement preview
 PatShip
         fcb     $00,$3C,$7E,$FF,$FF,$7E,$3C,$18  * 1 carrier
         fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18  * 2 battleship
@@ -2054,7 +2173,7 @@ TShip   fcn     "SHIP"
 THV     fcn     ""
 TH      fcn     "HORIZ"
 TV      fcn     "VERT"
-THint   fcn     "WASD MOVE  P AUTO  SPC PUT"
+THint   fcn     "WASD MOVE  R ROTATE  SPC PLACE  P AUTO"
 TReady  fcn     "READY - KEY"
 TComp   fcn     "COMPUTER PLACES..."
 TYou    fcn     "YOUR FLEET"
@@ -2079,7 +2198,7 @@ TNCrui  fcn     "CRUISER"
 TNSub   fcn     "SUB"
 TNDest  fcn     "DESTROYER"
 TI0     fcn     "HOW TO PLAY"
-TI1     fcn     "WASD  MOVE CURSOR"
+TI1     fcn     "WASD  MOVE SHIP"
 TI2     fcn     "SPACE PLACE / FIRE"
 TI3     fcn     "R     ROTATE SHIP"
 TI4     fcn     "P     AUTO-PLACE"
