@@ -404,6 +404,24 @@ def normalize_target_ram(target: str, memory_kb: int) -> tuple[str, int]:
     return t, mem
 
 
+def xroar_ram_org(target: str, memory_kb: int) -> str | None:
+    """XRoar -ram-org for this size, or None to leave the machine default.
+
+    Critical: cocous/coco2bus default to 64kx1. Passing ``-ram 32`` alone
+    yields ``0 banks * 64K = 0K`` and a black non-booting machine. Must set
+    matching chip organisation (16kx1 / 32kx1 / 64kx1).
+    """
+    t, mem = normalize_target_ram(target, memory_kb)
+    if t == "coco3":
+        # coco3 accepts -ram 128/512 with its default org
+        return None
+    return {
+        16: "16kx1",
+        32: "32kx1",
+        64: "64kx1",
+    }.get(mem)
+
+
 def entry_disk_name(entry: str) -> str:
     """Map src/main.mbas → MAIN.BAS (DECB 8.3 style)."""
     stem = Path(entry).stem.upper()[:8]
@@ -456,6 +474,9 @@ def build_xroar_command(
     ]
     if memory_kb:
         cmd.extend(["-ram", str(int(memory_kb))])
+        org = xroar_ram_org(target, memory_kb)
+        if org:
+            cmd.extend(["-ram-org", org])
 
     if audio:
         if ao or ao_gain:

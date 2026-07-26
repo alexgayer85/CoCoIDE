@@ -104,8 +104,8 @@ Changing `target` / `memory_kb` changes:
 
 | Machine | XRoar profile | Allowed RAM |
 |---------|---------------|-------------|
-| CoCo 1 (NTSC) | `cocous` | 16K, 32K, 64K |
-| CoCo 2 (NTSC) | `coco2bus` | 32K, 64K |
+| CoCo 1 (NTSC) | `cocous` | 16K, 32K, 64K (+ matching `-ram-org`) |
+| CoCo 2 (NTSC) | `coco2bus` | 32K, 64K (+ matching `-ram-org`) |
 | CoCo 3 (NTSC) | `coco3` | 128K, 512K |
 
 Needs ROMs under `~/.xroar/roms` (e.g. `bas13`+`extbas`+`disk11`, or `coco3`+`disk11`). Odd XRoar clones / PAL-only machines are not offered in the UI.

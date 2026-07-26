@@ -29,6 +29,8 @@ Typical layout under `~/.xroar/roms/`:
 
 Also check **Project Settings** (green chip): **CoCo 2 · 128K** (and similar) is invalid and used to pass a broken `-ram` to XRoar. The IDE now only offers legal sizes and clamps old projects.
 
+**CoCo 1/2 at 16K or 32K black screen:** XRoar needs matching chip layout (`-ram-org 16kx1` / `32kx1`). CoCoIDE passes this automatically; if you launch XRoar by hand, include it (e.g. `-default-machine cocous -ram 32 -ram-org 32kx1`).
+
 Configure extra ROMs as XRoar expects (config / ROM path). See the [XRoar manual](https://www.6809.org.uk/xroar/doc/).
 
 ## Auto-run does nothing / wrong program
