@@ -821,7 +821,7 @@ pt_fire
         sta     TmpC
         lda     #1
         lbsr    ApplyShot
-        * refresh only the shot cell on radar (fast)
+        * show shot result on radar — no solid cursor on top (it hid splash)
         lda     #1
         sta     BoardWhich
         lda     #RX0
@@ -833,7 +833,6 @@ pt_fire
         lda     CurC
         sta     CC
         lbsr    DrawOneCell
-        lbsr    DrawCursorRight
         lbsr    DrawScores
         lda     HT
         cmpa    #2
@@ -842,39 +841,28 @@ pt_fire
         lbeq    pt_ms
         cmpa    #3
         lbeq    pt_sk
-        * HIT
         leax    TMHit,pcr
-        lda     #1              ; tone 1 = hit
         lbra    pt_msg
 pt_ms   leax    TMMiss,pcr
-        clra                    ; tone 0 = miss
         lbra    pt_msg
-pt_sk   lbsr    MsgSunk         ; "SUNK <SHIP>" from SID; longer read
-        lda     #2              ; tone 2 = sink
-        lbsr    Tone
+pt_sk   lbsr    MsgSunk
         lbsr    PauseLong
-        lbsr    KeyFlush
         rts
 pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
         lbsr    PauseMed
-        lbsr    KeyFlush
         lbra    pt_i
 pt_msg
-        * X → message, A = tone id
-        sta     TmpTone
+        * X → HIT!/MISS!  — no Tone (DAC path froze combat after MISS)
         pshs    x
         lbsr    ClearMsg
         puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lda     TmpTone
-        lbsr    Tone
-        lbsr    PauseMed        ; readable linger
-        lbsr    KeyFlush
+        lbsr    PauseMed
         rts
 
 ComputerTurn
@@ -930,23 +918,16 @@ ct_ac
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lda     #1
-        lbsr    Tone
         bra     ct_end
 ct_m    leax    TMMiss,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        clra
-        lbsr    Tone
         bra     ct_end
 ct_s    clr     Hunt
         lbsr    MsgSunk         ; enemy sank one of yours
-        lda     #2
-        lbsr    Tone
 ct_end  lbsr    PauseMed
         lbsr    ClearMsg
-        lbsr    KeyFlush
         rts
 
 ClearMsg
@@ -1280,28 +1261,20 @@ ait_bad orcc    #$01
 * (Old path called Beep before draw and could appear frozen on win.)
 ***********************************************************************
 GameOver
-        lbsr    KeyFlush
         lbsr    DrawBattle
         lda     EH
         bne     gol
         leax    TWin,pcr
-        lda     #2              ; win tone
         bra     gow
 gol     leax    TLose,pcr
-        clra                    ; lose tone
-gow     pshs    a,x             ; tone, message
-        lda     ,s
-        lbsr    Tone
-        puls    a,x
-        lda     #72
+gow     lda     #72
         ldb     #80
         lbsr    DrawStr
         leax    TGo,pcr
         lda     #40
         ldb     #112
         lbsr    DrawStr
-        lbsr    PauseLong       ; keep YOU WIN / LOSE on screen
-        lbsr    KeyFlush
+        lbsr    PauseLong
         lbsr    WaitKey
         rts
 
@@ -1486,12 +1459,12 @@ cfa1    sta     ,x
         bne     cfa1
         rts
 
-* Empty = hollow box. Miss keeps the box + center splash (not a hull).
-* Hit = X. Ships = solid hull silhouettes (destroyer ≠ miss).
+* Empty = hollow box. Miss = splash (distinct from all ships). Hit = X.
 PatEmpty
         fcb     $FF,$81,$81,$81,$81,$81,$81,$FF
 PatMiss
-        fcb     $FF,$81,$99,$A5,$A5,$99,$81,$FF
+        * ring splash — white frame + 4-dot burst (not a hull bar)
+        fcb     $FF,$81,$A5,$99,$99,$A5,$81,$FF
 PatHit
         fcb     $FF,$C3,$A5,$99,$99,$A5,$C3,$FF
 PatShip
@@ -1499,7 +1472,7 @@ PatShip
         fcb     $00,$18,$3C,$7E,$FF,$7E,$3C,$18  * 2 battleship
         fcb     $00,$00,$3C,$7E,$7E,$3C,$00,$00  * 3 cruiser
         fcb     $00,$18,$3C,$7E,$3C,$18,$00,$00  * 4 sub
-        fcb     $00,$00,$7E,$FF,$FF,$7E,$00,$00  * 5 destroyer (bar, not splash)
+        fcb     $00,$00,$7E,$FF,$FF,$7E,$00,$00  * 5 destroyer
 
 * X0,Y0 → X = &GFX + Y*32 + X/8
 CellAddrByte
@@ -1878,55 +1851,17 @@ wk_done rts
 KChar   fcb     0
 
 
-* Sound / RNG
-* AUDIO ON in main.bas sets the mux once. Do NOT rewrite $FF01/$FF03
-* during play — those are PIA0 (keyboard); forcing $3C hung input after P.
+* Sound / RNG — STUBBED. Any DAC/PIA write during play has frozen
+* P-place and MISS paths on real XRoar runs. Re-enable only after a
+* proven-safe path (hello beep is fine alone; hybrid PMODE+key is not).
 ***********************************************************************
 SoundInit
-        * PIA1 only + center DAC (keyboard PIA0 left alone)
-        lda     #$3C
-        sta     $FF23
-        lda     #$80
-        sta     $FF20
         rts
 
-* Tone A=0 miss, 1 hit, 2 sink/win — DAC $FF20 only, fixed short loops
 Tone
 Beep
-        pshs    a,b,x
-        lda     ,s              ; original A (top of pshs a,b,x)
-        tsta
-        beq     tn0
-        cmpa    #1
-        beq     tn1
-        ldb     #10             ; sink/win
-        ldx     #16
-        bra     tng
-tn0     ldb     #6              ; miss
-        ldx     #36
-        bra     tng
-tn1     ldb     #8              ; hit
-        ldx     #22
-tng
-tn_o    lda     #$80
-tn_i    sta     $FF20
-        eora    #$3F
-        sta     $FF20
-        pshs    x
-tn_d    leax    -1,x
-        bne     tn_d
-        puls    x
-        deca
-        bne     tn_i
-        decb
-        bne     tn_o
-        lda     #$80
-        sta     $FF20
-        puls    a,b,x
-        rts
-
 Click
-        rts                     ; silent — never touch sound from place UI
+        rts
 
 SeedRnd
         * Prefer BASIC TIMER; fall back. WaitKey further mixes Rnd.
