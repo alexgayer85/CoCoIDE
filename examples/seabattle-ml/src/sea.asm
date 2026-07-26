@@ -1010,6 +1010,8 @@ ct_m    leax    TMCms,pcr
 ct_s    clr     Hunt
         lbsr    MsgSunk
 ct_end  lbsr    PauseLong
+        leax    TMComp2,pcr
+        lbsr    ShowMsg
         lbsr    PauseMed
         lbsr    ClearMsg
         lbsr    KeyFlush
