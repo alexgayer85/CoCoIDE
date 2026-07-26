@@ -699,25 +699,18 @@ pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lda     #0
-        lbsr    Beep
-        lbsr    PauseShort
+        lbsr    TinyPause
         lbra    pt_i
-pt_msg  lbsr    ClearMsg
+pt_msg
+        * X already → message string (HIT!/MISS!/SUNK!)
+        pshs    x
+        lbsr    ClearMsg
+        puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lda     HT
-        beq     pt_b0
-        cmpa    #3
-        beq     pt_b2
-        lda     #1
-        bra     pt_bb
-pt_b0   clra
-        bra     pt_bb
-pt_b2   lda     #2
-pt_bb   lbsr    Beep
-        lbsr    PauseShort      ; brief pause then computer fires (no key wait)
+        lbsr    TinyPause
+        * Do NOT WaitKey / Beep here — return so BattleLoop runs ComputerTurn
         rts
 
 ComputerTurn
@@ -726,7 +719,22 @@ ComputerTurn
         lda     #8
         ldb     #180
         lbsr    DrawStr
+        lbsr    TinyPause
         lbsr    AiPick
+        * clamp AI coords
+        lda     AR
+        beq     ct_fix
+        cmpa    #10
+        bls     ct_ar
+ct_fix lda     #1
+        sta     AR
+ct_ar   lda     AC
+        beq     ct_fc
+        cmpa    #10
+        bls     ct_ac
+ct_fc   lda     #1
+        sta     AC
+ct_ac
         lda     AR
         sta     TmpR
         lda     AC
@@ -750,7 +758,8 @@ ComputerTurn
         ldb     #180
         lbsr    DrawStr
         lda     HT
-        beq     ct_m
+        cmpa    #1
+        blo     ct_m
         cmpa    #3
         beq     ct_s
         lda     #1
@@ -759,20 +768,15 @@ ComputerTurn
         sta     HR
         lda     AC
         sta     HC
-        lda     #1
-        bra     ct_b
-ct_m    clra
-        bra     ct_b
+        bra     ct_end
+ct_m    bra     ct_end
 ct_s    clr     Hunt
-        lda     #2
-ct_b    lbsr    Beep
-        lbsr    PauseShort
+ct_end  lbsr    TinyPause
         lbsr    ClearMsg
         rts
 
-* Wipe status line (y=180, 32 chars wide)
 ClearMsg
-        pshs    a,b,x,y
+        pshs    a,b,x
         lda     #180
         ldb     #GBPL
         mul
@@ -783,22 +787,21 @@ ClearMsg
 cm1     sta     ,x+
         decb
         bne     cm1
-        puls    a,b,x,y
-        rts
-
-* Short fixed delay only (no keyboard)
-PauseShort
-        pshs    a,b,x
-        ldb     #3
-ps0     ldx     #$0C00
-ps1     leax    -1,x
-        bne     ps1
-        decb
-        bne     ps0
         puls    a,b,x
         rts
+
+* ~brief delay; register counter only
+TinyPause
+        pshs    x
+        ldx     #$1000
+tp1     leax    -1,x
+        bne     tp1
+        puls    x
+        rts
+PauseShort
+        bra     TinyPause
 PauseMed
-        bra     PauseShort
+        bra     TinyPause
 
 DrawBattleHUD
         leax    TYou,pcr
@@ -940,102 +943,83 @@ csn     inc     CC
         rts
 
 ***********************************************************************
-* AI
+* AI — linear scan only (no random; cannot hang)
 ***********************************************************************
 AiPick
+        * Prefer neighbors if hunting
         lda     Hunt
-        lbeq    air
-        lda     #1
-        sta     TmpI
-ain     lda     TmpI
-        cmpa    #5
-        lbhs    air0
+        beq     ai_scan
         lda     HR
-        ldb     HC
-        lda     TmpI
-        cmpa    #1
-        lbne    ad2
+        beq     ai_scan
+        * try N S W E
         lda     HR
         deca
         ldb     HC
-        lbra    ait
-ad2     cmpa    #2
-        lbne    ad3
+        lbsr    ai_try
+        bcc     ai_got
         lda     HR
         inca
         ldb     HC
-        lbra    ait
-ad3     cmpa    #3
-        lbne    ad4
+        lbsr    ai_try
+        bcc     ai_got
         lda     HR
         ldb     HC
         decb
-        lbra    ait
-ad4     lda     HR
+        lbsr    ai_try
+        bcc     ai_got
+        lda     HR
         ldb     HC
         incb
-ait     tsta
-        lbeq    aix
+        lbsr    ai_try
+        bcc     ai_got
+        clr     Hunt
+ai_scan lda     #1
+        sta     AR
+ais_r   lda     #1
+        sta     AC
+ais_c   ldx     #AK
+        lda     AR
+        ldb     AC
+        lbsr    CellAddr
+        lda     ,x
+        beq     ai_got          ; empty → take it (AR/AC already set)
+        inc     AC
+        lda     AC
+        cmpa    #11
+        blo     ais_c
+        inc     AR
+        lda     AR
+        cmpa    #11
+        blo     ais_r
+        lda     #1
+        sta     AR
+        sta     AC
+ai_got  rts
+
+* A=row B=col → if valid empty on AK, set AR/AC and clear carry; else set carry
+ai_try
+        tsta
+        beq     ait_bad
         cmpa    #10
-        lbhi    aix
+        bhi     ait_bad
         tstb
-        lbeq    aix
+        beq     ait_bad
         cmpb    #10
-        lbhi    aix
+        bhi     ait_bad
         sta     RR
         stb     CC
         ldx     #AK
         lbsr    CellAddr
         lda     ,x
-        lbne    aix
+        bne     ait_bad
         lda     RR
         sta     AR
         lda     CC
         sta     AC
+        andcc   #$FE            ; clear C = success
         rts
-aix     inc     TmpI
-        lbra    ain
-air0    clr     Hunt
-air     clr     Tries
-ail     inc     Tries
-        lda     Tries
-        cmpa    #200
-        lbhi    aisc
-        lda     #10
-        lbsr    RandN
-        sta     AR
-        lda     #10
-        lbsr    RandN
-        sta     AC
-        ldx     #AK
-        lda     AR
-        ldb     AC
-        lbsr    CellAddr
-        lda     ,x
-        lbne    ail
+ait_bad orcc    #$01            ; set C = fail
         rts
-aisc    lda     #1
-        sta     AR
-aisr    lda     #1
-        sta     AC
-aisc2   ldx     #AK
-        lda     AR
-        ldb     AC
-        lbsr    CellAddr
-        lda     ,x
-        lbeq    aiso
-        inc     AC
-        lda     AC
-        cmpa    #11
-        blo     aisc2
-        inc     AR
-        lda     AR
-        cmpa    #11
-        blo     aisr
-        lda     #1
-        sta     AR
-        sta     AC
-aiso    rts
 
 ***********************************************************************
 * Game over
