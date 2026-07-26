@@ -105,35 +105,53 @@ c1      clr     ,x+
         rts
 
 ***********************************************************************
-* Title — 1-bit dithered naval silhouette + clean copy
+* Title — full-screen PMODE 4 splash (src/naval_pmode4.bin → $0E00)
 ***********************************************************************
 TitleScreen
-        lbsr    GfxCls
-        * sky dither band (light)
-        lda     #0
-        ldb     #36
-        leax    PatDitherLo,pcr
-        lbsr    FillBand
-        * water dither band (heavier)
-        lda     #100
-        ldb     #40
-        leax    PatDitherHi,pcr
-        lbsr    FillBand
-        * ship silhouette mid-screen
-        lbsr    DrawShipArt
-        leax    TTitle,pcr
-        lda     #48
-        ldb     #8
-        lbsr    DrawStr
-        leax    TSub,pcr
-        lda     #40
-        ldb     #20
-        lbsr    DrawStr
+        lbsr    BlitSplash      ; 6144-byte naval art to graphics page
+        * dark bar at bottom so "PRESS ANY KEY" stays readable
+        lda     #176
+        ldb     #16
+        lbsr    ClearRows
         leax    TGo,pcr
         lda     #40
-        ldb     #168
+        ldb     #180
         lbsr    DrawStr
         lbsr    WaitKey
+        rts
+
+* Copy Splash (raw PMODE4 frame) → GFX. Uses D as word copy.
+BlitSplash
+        pshs    a,b,x,y,u
+        leax    Splash,pcr
+        ldy     #GFX
+        ldu     #6144/2         ; word count
+bs_lp   ldd     ,x++
+        std     ,y++
+        leau    -1,u
+        bne     bs_lp
+        puls    a,b,x,y,u
+        rts
+
+* A=startY B=row count — clear full-width black bars
+ClearRows
+        pshs    a,b,x
+        sta     TY
+        stb     Ht
+cr_r    lda     TY
+        ldb     #GBPL
+        mul
+        tfr     d,x
+        leax    GFX,x
+        ldb     #32
+        clra
+cr_c    sta     ,x+
+        decb
+        bne     cr_c
+        inc     TY
+        dec     Ht
+        bne     cr_r
+        puls    a,b,x
         rts
 
 ***********************************************************************
@@ -187,80 +205,6 @@ InstructScreen
         lbsr    DrawStr
         lbsr    WaitKey
         rts
-
-* A=startY B=rows X→2 alternating dither bytes (lo,hi pattern pair)
-FillBand
-        pshs    a,b,x,y
-        sta     TY
-        stb     Ht
-        tfr     x,y             ; Y = pattern base
-fb_row  lda     TY
-        ldb     #GBPL
-        mul
-        tfr     d,x
-        leax    GFX,x
-        lda     TY
-        anda    #1
-        beq     fb_e0
-        lda     1,y
-        bra     fb_fill
-fb_e0   lda     ,y
-fb_fill ldb     #32
-fb_c    sta     ,x+
-        decb
-        bne     fb_c
-        inc     TY
-        dec     Ht
-        bne     fb_row
-        puls    a,b,x,y
-        rts
-
-PatDitherLo
-        fcb     $00,$22         ; sparse sky
-PatDitherHi
-        fcb     $55,$AA         ; denser water
-
-* 64×16 ship (8 bytes × 16 rows), 1-bit silhouette + deck dither
-DrawShipArt
-        pshs    a,b,x,y
-        leax    ShipArt,pcr
-        lda     #56             ; Y start
-        ldb     #GBPL
-        mul
-        tfr     d,y
-        leay    GFX+10,y        ; X ≈ 80 (byte 10)
-        ldb     #16             ; rows
-dsa_r   pshs    b
-        ldb     #8              ; bytes / row
-dsa_c   lda     ,x+
-        sta     ,y+
-        decb
-        bne     dsa_c
-        leay    24,y            ; next scanline (+32-8)
-        puls    b
-        decb
-        bne     dsa_r
-        puls    a,b,x,y
-        rts
-
-* Battleship bow→stern, smoke stack, hull dither (bit7=left)
-ShipArt
-        fcb     $00,$00,$00,$10,$00,$00,$00,$00
-        fcb     $00,$00,$00,$10,$00,$00,$00,$00
-        fcb     $00,$00,$00,$38,$00,$00,$00,$00
-        fcb     $00,$00,$01,$FE,$00,$00,$00,$00
-        fcb     $00,$00,$07,$FF,$80,$00,$00,$00
-        fcb     $00,$00,$0F,$FF,$C0,$00,$00,$00
-        fcb     $00,$00,$1F,$FF,$E0,$00,$00,$00
-        fcb     $00,$00,$3F,$FF,$F0,$00,$00,$00
-        fcb     $00,$00,$7F,$FF,$F8,$00,$00,$00
-        fcb     $00,$00,$FF,$FF,$FC,$00,$00,$00
-        fcb     $00,$01,$FF,$FF,$FE,$00,$00,$00
-        fcb     $00,$03,$FF,$FF,$FF,$00,$00,$00
-        fcb     $00,$07,$FF,$FF,$FF,$80,$00,$00
-        fcb     $00,$0F,$FF,$FF,$FF,$C0,$00,$00
-        fcb     $00,$1F,$AA,$55,$AA,$E0,$00,$00
-        fcb     $00,$00,$00,$00,$00,$00,$00,$00
 
 ***********************************************************************
 * Placement
@@ -2227,6 +2171,13 @@ TI8     fcn     "O  MISS    X  HIT"
 TI9     fcn     "STATUS LINE BELOW"
 TmpCh   zmb     1
 TmpTone zmb     1
+
+***********************************************************************
+* Full-screen title splash — raw PMODE 4 page (256×192 / 8 = 6144 bytes)
+* Assembled from src/naval_pmode4.bin (cwd = src/ when CoCoIDE runs lwasm).
+***********************************************************************
+Splash
+        includebin naval_pmode4.bin
 
 ***********************************************************************
 * Variables (in LOADM image)

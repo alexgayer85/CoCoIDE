@@ -53,10 +53,13 @@ After a result message, press a key to continue.
 
 | File | Role |
 |------|------|
-| `src/main.bas` | `CLEAR` / `PCLEAR4` / `PMODE4,1` / `SCREEN1,1` / `LOADM"SEA"` / `EXEC` |
-| `src/sea.asm` | Game + PMODE 4 draw + **matrix keyboard** (not POLCAT) |
+| `src/main.bas` | `CLEAR` / `PCLEAR4` / `PMODE4,1` / `SCREEN1,1` / `AUDIO ON` / `LOADM"SEA"` / `EXEC` |
+| `src/sea.asm` | Game + PMODE 4 draw + keyboard |
+| `src/naval_pmode4.bin` | Title splash — raw **6144-byte** PMODE 4 framebuffer (blitted to `$0E00`) |
 
 ML load address **`$3F00`**. Graphics page **`$0E00`** (standard after `PCLEAR 4`).
+
+Replace the splash by overwriting `src/naval_pmode4.bin` with another 256×192 / 1-bit PMODE 4 dump (exactly 6144 bytes) and rebuilding.
 
 ## Why matrix keys?
 
