@@ -357,69 +357,125 @@ AutoPlaceFleet
         ldx     #ES
         * fall through
 AutoFillGrid
-        * X = base of 100-byte grid
-        pshs    x
+        * X = base of 100-byte grid; keep base in U
+        tfr     x,u
         ldb     #100
 af_cl   clr     ,x+
         decb
         bne     af_cl
-        puls    x
-        * column offset 0..3 for variety
         lda     Rnd
         anda    #3
-        sta     TmpC            ; 0..3 column offset
-        * ship1 row0 len5
-        pshs    x
-        ldb     TmpC
-        abx
+        lbeq    afl0
+        cmpa    #1
+        lbeq    afl1
+        cmpa    #2
+        lbeq    afl2
+        lbra    afl3
+
+* layout 0: upper-left
+afl0    tfr     u,x
         lda     #1
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        puls    x
-        * ship2 row1 len4
-        pshs    x
-        leax    10,x
-        ldb     TmpC
-        abx
+        sta     0,x
+        sta     1,x
+        sta     2,x
+        sta     3,x
+        sta     4,x
         lda     #2
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        puls    x
-        * ship3 row2 len3
-        pshs    x
-        leax    20,x
-        ldb     TmpC
-        abx
+        sta     10,x
+        sta     11,x
+        sta     12,x
+        sta     13,x
         lda     #3
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        puls    x
-        * ship4 row3 len3
-        pshs    x
-        leax    30,x
-        ldb     TmpC
-        abx
+        sta     20,x
+        sta     21,x
+        sta     22,x
         lda     #4
-        sta     ,x+
-        sta     ,x+
-        sta     ,x+
-        puls    x
-        * ship5 row4 len2
-        pshs    x
-        leax    40,x
-        ldb     TmpC
-        abx
+        sta     33,x
+        sta     34,x
+        sta     35,x
         lda     #5
-        sta     ,x+
-        sta     ,x+
-        puls    x
-        lbsr    Rand            ; vary next auto (enemy)
+        sta     48,x
+        sta     49,x
+        lbra    af_done
+
+* layout 1: lower-right
+afl1    tfr     u,x
+        lda     #1
+        sta     55,x
+        sta     56,x
+        sta     57,x
+        sta     58,x
+        sta     59,x
+        lda     #2
+        sta     65,x
+        sta     66,x
+        sta     67,x
+        sta     68,x
+        lda     #3
+        sta     76,x
+        sta     77,x
+        sta     78,x
+        lda     #4
+        sta     84,x
+        sta     85,x
+        sta     86,x
+        lda     #5
+        sta     98,x
+        sta     99,x
+        lbra    af_done
+
+* layout 2: top-right + verticals
+afl2    tfr     u,x
+        lda     #1
+        sta     5,x
+        sta     6,x
+        sta     7,x
+        sta     8,x
+        sta     9,x
+        lda     #2
+        sta     19,x
+        sta     29,x
+        sta     39,x
+        sta     49,x
+        lda     #3
+        sta     50,x
+        sta     51,x
+        sta     52,x
+        lda     #4
+        sta     70,x
+        sta     71,x
+        sta     72,x
+        lda     #5
+        sta     90,x
+        sta     91,x
+        lbra    af_done
+
+* layout 3: mixed scatter
+afl3    tfr     u,x
+        lda     #1
+        sta     2,x
+        sta     3,x
+        sta     4,x
+        sta     5,x
+        sta     6,x
+        lda     #2
+        sta     22,x
+        sta     32,x
+        sta     42,x
+        sta     52,x
+        lda     #3
+        sta     60,x
+        sta     61,x
+        sta     62,x
+        lda     #4
+        sta     8,x
+        sta     18,x
+        sta     28,x
+        lda     #5
+        sta     95,x
+        sta     96,x
+af_done lbsr    Rand
+        lbsr    Rand
         rts
 
 * ShipId (1..5) → B = length
@@ -681,29 +737,17 @@ pt_al   leax    TMAlr,pcr
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        clra
-        lbsr    Beep
         lbsr    PauseRead
         lbra    pt_i
 pt_msg
-        * X → HIT!/MISS!/SUNK!
+        * X → HIT!/MISS!/SUNK!  — no Beep (has hung combat before)
         pshs    x
         lbsr    ClearMsg
         puls    x
         lda     #8
         ldb     #180
         lbsr    DrawStr
-        lda     HT
-        beq     pt_b0
-        cmpa    #3
-        beq     pt_b2
-        lda     #1
-        bra     pt_bb
-pt_b0   clra
-        bra     pt_bb
-pt_b2   lda     #2
-pt_bb   lbsr    Beep
-        lbsr    PauseRead       ; time to read result
+        lbsr    PauseRead
         rts
 
 ComputerTurn
@@ -753,22 +797,15 @@ ct_ac
         beq     ct_m
         cmpa    #3
         beq     ct_s
-        * hit — start hunt
         lda     #1
         sta     Hunt
         lda     AR
         sta     HR
         lda     AC
         sta     HC
-        lda     #1
-        lbsr    Beep
         bra     ct_end
-ct_m    clra
-        lbsr    Beep
-        bra     ct_end
+ct_m    bra     ct_end
 ct_s    clr     Hunt
-        lda     #2
-        lbsr    Beep
 ct_end  lbsr    PauseRead
         lbsr    ClearMsg
         rts
@@ -954,56 +991,60 @@ csn     inc     CC
         rts
 
 ***********************************************************************
-* AI: hunt neighbors after hit, else random (bounded), else scan
+* AI: hunt after hit, else pseudo-random from Rnd, else scan.
+* Try counter in B only (BSS Tries was unsafe).
 ***********************************************************************
 AiPick
         lda     Hunt
         beq     ai_rnd
         lda     HR
         beq     ai_rnd
-        * N
         lda     HR
         deca
         ldb     HC
         lbsr    ai_try
         lbcc    ai_got
-        * S
         lda     HR
         inca
         ldb     HC
         lbsr    ai_try
-        bcc     ai_got
-        * W
+        lbcc    ai_got
         lda     HR
         ldb     HC
         decb
         lbsr    ai_try
-        bcc     ai_got
-        * E
+        lbcc    ai_got
         lda     HR
         ldb     HC
         incb
         lbsr    ai_try
-        bcc     ai_got
+        lbcc    ai_got
         clr     Hunt
-ai_rnd  clr     Tries
-ai_rl   inc     Tries
-        lda     Tries
-        cmpa    #60
-        bhi     ai_scan
-        lda     #10
-        lbsr    RandN
-        sta     AR
-        lda     #10
-        lbsr    RandN
-        sta     AC
+ai_rnd  ldb     #40             ; max random tries (register!)
+ai_rl   pshs    b
+        lbsr    Rand
+        anda    #$0F
+        beq     ai_rz
+        cmpa    #10
+        bls     ai_r1
+ai_rz   lda     #1
+ai_r1   sta     AR
+        lbsr    Rand
+        anda    #$0F
+        beq     ai_cz
+        cmpa    #10
+        bls     ai_c1
+ai_cz   lda     #5
+ai_c1   sta     AC
         ldx     #AK
         lda     AR
         ldb     AC
         lbsr    CellAddr
         lda     ,x
-        bne     ai_rl           ; already tried
-        rts
+        puls    b
+        beq     ai_got          ; empty cell — AR/AC set
+        decb
+        bne     ai_rl
 ai_scan lda     #1
         sta     AR
 ais_r   lda     #1
@@ -1027,7 +1068,6 @@ ais_c   ldx     #AK
         sta     AC
 ai_got  rts
 
-* A=row B=col → empty on AK? set AR/AC, clear C; else set C
 ai_try
         tsta
         beq     ait_bad
