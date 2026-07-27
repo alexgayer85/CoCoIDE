@@ -2,12 +2,12 @@
   "name": "blip",
   "id": 0,
   "wave": "square",
-  "pitch": 180,
-  "pitch_end": 180,
-  "length": 800,
+  "pitch": 48,
+  "pitch_end": 48,
+  "length": 2500,
   "volume": 56,
   "duty": 0.5,
   "table": null,
-  "comment": "",
+  "comment": "~1.5 kHz beep",
   "version": 1
 }

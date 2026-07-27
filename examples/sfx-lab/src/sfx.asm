@@ -115,10 +115,12 @@ SoundInit
 ***********************************************************************
 * PlaySfx — A = effect id
 *
-* Each "tick" outputs one wavetable sample then delays. Delay scales with
-* pitch (higher pitch → shorter delay → higher tone). Length is in ticks.
-* Old v1 used delay~10 cycles (tones were ~2ms clicks). Now delay is
-* hundreds of cycles so effects are clearly audible.
+* Wavetable playback at ~fixed sample rate:
+*   phase (8-bit) += pitch     → frequency ≈ Fs * pitch / 256
+*   delay ~fixed               → Fs high enough for audible tones
+* Length = number of samples to emit.
+*
+* pitch ~16  → low tone;  pitch ~40–80 → mid;  pitch ~120+ → high
 PlaySfx
                 pshs    cc,a,b,x,y,u
                 orcc    #$50
@@ -148,7 +150,7 @@ PlaySfx
                 lda     $FF23
                 ora     #$08
                 sta     $FF23
-                * PB1 out enable (helps XRoar / some hardware hear tone)
+                * PB1 as output (Tepolt / Sea Battle path)
                 lda     $FF23
                 anda    #$FB
                 sta     $FF23
@@ -181,7 +183,7 @@ ps_n1           eora    SfxLfsr+1
                 lda     SfxLfsr+1
                 anda    #63
 ps_scale
-                * A=0..63 → DAC bits; also drive PB1 from sample MSB
+                * A=0..63 sample * vol/63 → DAC <<2
                 ldb     SfxVol
                 mul
                 lsra
@@ -201,39 +203,32 @@ ps_scale
                 lsla
                 anda    #$FC
                 sta     $FF20
-                * PB1: bit1 of $FF22 follow sample energy
-                tfr     a,b
+                * PB1 follows sample MSB (helps host audio path)
+                tsta
+                bpl     ps_p0
                 lda     $FF22
-                andb    #$80
-                beq     ps_p0
                 ora     #$02
                 bra     ps_p1
-ps_p0           anda    #$FD
+ps_p0           lda     $FF22
+                anda    #$FD
 ps_p1           sta     $FF22
-                * advance table index by 1 (walk wave); pitch controls delay
-                inc     SfxPhase
-                * delay: base + (256-pitch)*scale  → higher pitch, less delay
-                lda     #255
-                suba    SfxPitch
-                lsra                    ; 0..127
-                inca
-                tfr     a,b
-                clra
-                tfr     d,x             ; X = 1..128
-                leax    40,x            ; minimum pad
-ps_d1           ldb     #8
-ps_d2           decb
-                bne     ps_d2
-                leax    -1,x
+                * phase += pitch  (wrap 8-bit)  → audible f = Fs*pitch/256
+                lda     SfxPhase
+                adda    SfxPitch
+                sta     SfxPhase
+                * fixed delay ≈ 80–100 cycles → Fs ballpark several kHz
+                ldb     #28
+ps_d1           decb
                 bne     ps_d1
-                * pitch slide
+                * pitch slide toward end
                 lda     SfxPitch
                 cmpa    SfxPend
                 beq     ps_len
                 blo     ps_inc
-                dec     SfxPitch
-                bra     ps_len
-ps_inc          inc     SfxPitch
+                deca
+                bra     ps_pst
+ps_inc          inca
+ps_pst          sta     SfxPitch
 ps_len
                 ldd     SfxLen
                 subd    #1
@@ -251,9 +246,9 @@ ps_done
 ***********************************************************************
 * Catalog: wave_id, flags, pitch, pitch_end, len_hi, len_lo, vol, pad
 SfxCat
-        fcb     0,$00,$B4,$B4,$03,$20,$38,$00  * 0: blip
-        fcb     1,$01,$78,$28,$04,$B0,$34,$00  * 1: splash
-        fcb     2,$00,$C8,$1E,$05,$DC,$32,$00  * 2: dive
+        fcb     0,$00,$30,$30,$09,$C4,$38,$00  * 0: blip
+        fcb     1,$01,$20,$0C,$0F,$A0,$34,$00  * 1: splash
+        fcb     2,$00,$40,$0C,$13,$88,$32,$00  * 2: dive
 
 SfxTables
                 includebin sfx_tables.bin
