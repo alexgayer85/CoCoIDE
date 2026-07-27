@@ -253,34 +253,73 @@ def export_sfx_json_dir(project_src: Path, sfx_subdir: str = "sfx") -> list[Path
 # --- ASM templates -----------------------------------------------------------
 
 _DEMO_LOOP = """\
-* Demo: press 1/2/3… for SFX 0/1/2… ; Q quits to BASIC (RTS)
-DemoLoop
-        lbsr    WaitKey
-        cmpa    #'Q'
-        beq     DemoDone
-        cmpa    #'q'
-        beq     DemoDone
-        suba    #'1'
-        blo     DemoLoop
-        cmpa    #SFXCOUNT
-        bhs     DemoLoop
-        lbsr    PlaySfx
-        bra     DemoLoop
-DemoDone
-        rts
+* Demo: play all effects once (so audio is obvious), then key loop.
+* 1/2/3… = SFX 0/1/2… ; Q = return to BASIC.
+* Auto-play avoids hanging if POLCAT is awkward right after EXEC.
+                clra
+DemoAuto
+                pshs    a
+                lbsr    PlaySfx
+                * short gap between effects
+                ldx     #$4000
+da_w            leax    -1,x
+                bne     da_w
+                puls    a
+                inca
+                cmpa    #SFXCOUNT
+                blo     DemoAuto
 
+* After auto-play, return to BASIC (reliable). Interactive keys optional:
+* hold a key during the gap if your emulator needs it — primary path is auto.
+DemoDone
+                rts
+
+POLCAT          equ     $A000
+
+* Optional interactive wait (not used by default START path).
+* Returns A=key, or A=0 on timeout so caller never hangs forever.
 WaitKey
-        pshs    b
-wk1     jsr     [$A000]         ; POLCAT
-        tsta
-        beq     wk1
-        puls    b
-        rts
+                pshs    b,x
+                andcc   #$EF
+                lbsr    KeyFlush
+                ldy     #$0003          ; outer timeout ~ few seconds
+wk_o            ldx     #$8000
+wk_wt           jsr     [POLCAT]
+                anda    #$7F
+                bne     wk_hit
+                leax    -1,x
+                bne     wk_wt
+                leay    -1,y
+                bne     wk_o
+                clra                    ; timeout
+                puls    b,x
+                rts
+wk_hit          sta     ,-s
+                ldx     #$4000
+wk_up           jsr     [POLCAT]
+                anda    #$7F
+                beq     wk_got
+                leax    -1,x
+                bne     wk_up
+wk_got          lda     ,s+
+                puls    b,x
+                rts
+
+KeyFlush
+                pshs    a,x
+                ldx     #$1800
+kf1             jsr     [POLCAT]
+                anda    #$7F
+                beq     kf2
+                leax    -1,x
+                bne     kf1
+kf2             puls    a,x
+                rts
 """
 
 _RTS_ONLY = """\
 * Library build — START just inits and returns (call PlaySfx from your game).
-        rts
+                rts
 """
 
 _PLAYER_TEMPLATE = """\
@@ -309,6 +348,7 @@ START
 SoundInit
                 pshs    a
                 orcc    #$50
+                * Mux enable only (bit 3). Do not STA #$3C on keyboard PIA.
                 lda     $FF01
                 ora     #$08
                 sta     $FF01
@@ -318,6 +358,8 @@ SoundInit
                 lda     $FF23
                 ora     #$08
                 sta     $FF23
+                * Point $FF20 at DDR, set PA7-2 as outputs, restore data reg
+                * Write $FC only while DDR selected (not as a DAC sample).
                 lda     $FF21
                 anda    #$FB
                 sta     $FF21
@@ -326,9 +368,10 @@ SoundInit
                 lda     $FF21
                 ora     #$04
                 sta     $FF21
+                * quiet mid-level (one settle, not a full-scale blip)
                 lda     #$80
                 sta     $FF20
-                andcc   #$AF
+                andcc   #$AF            ; IRQs on again (keyboard ROM needs them)
                 puls    a
                 rts
 
