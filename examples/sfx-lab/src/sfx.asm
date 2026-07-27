@@ -1,7 +1,7 @@
 ***********************************************************************
 * CoCoIDE SFX player — auto-generated (re-export from SFX Lab)
-* SoundInit / PlaySfx (A=id). Catalog: vol→vol_end envelope, pitch slide.
-* Tables: sfx_tables.bin (1280 bytes). DAC $FF20, mux ORA #$08.
+* IMPORTANT: working storage is fcb/fdb (in the .BIN). Do not use rmb
+* after includebin — DECB load would omit those bytes.
 ***********************************************************************
 
 SFXCOUNT        equ     5
@@ -64,7 +64,6 @@ SoundInit
                 sta     $FF21
                 lda     #$80
                 sta     $FF20
-                * PB1 out
                 lda     $FF23
                 anda    #$FB
                 sta     $FF23
@@ -79,6 +78,7 @@ SoundInit
                 rts
 
 ***********************************************************************
+* PlaySfx — A = id  (same algorithm as host simulate_playsfx_levels)
 PlaySfx
                 pshs    cc,a,b,x,y,u
                 orcc    #$50
@@ -97,45 +97,45 @@ PlaySfx
                 lda     4,u
                 ldb     5,u
                 std     SfxLen
-                std     SfxLen0         ; original length for envelope
                 lda     6,u
                 sta     SfxVol
                 lda     7,u
                 sta     SfxVolEnd
-                * period = max(1, min(255,len) / max(1,|dv|))
+                * vperiod = max(1, min(255,len)/max(1,|dv|))
                 lda     6,u
                 suba    7,u
-                bpl     ps_vd
+                bpl     ps_abs
                 nega
-ps_vd           tsta
-                bne     ps_vs
-                inca
-ps_vs           tfr     a,b             ; B = |dv|
+ps_abs          tsta
+                bne     ps_dv
+                lda     #1
+ps_dv           tfr     a,b
                 lda     SfxLen
-                bne     ps_vhi
+                bne     ps_lhi
                 lda     SfxLen+1
-                bra     ps_vdiv
-ps_vhi          lda     #255
-ps_vdiv         * A / B → period (8-bit)
-                pshs    b
+                bra     ps_div
+ps_lhi          lda     #255
+ps_div          pshs    b
                 clrb
-ps_vq           cmpa    ,s
-                blo     ps_vqd
+ps_divl         cmpa    ,s
+                blo     ps_divd
                 suba    ,s
                 incb
-                bne     ps_vq
-ps_vqd          tstb
-                bne     ps_vpok
+                bne     ps_divl
+ps_divd         tstb
+                bne     ps_divok
                 incb
-ps_vpok         stb     SfxVPeriod
+ps_divok        stb     SfxVPeriod
                 stb     SfxVCnt
-                puls    b
+                puls    a
                 lda     ,u
                 clrb
                 tfr     d,x
                 leax    SfxTables,x
                 stx     SfxTab
                 clr     SfxPhase
+                ldd     #$ACE1
+                std     SfxLfsr
                 lda     $FF23
                 ora     #$08
                 sta     $FF23
@@ -143,28 +143,26 @@ ps_vpok         stb     SfxVPeriod
                 lbeq    ps_quiet
 
 ps_loop
-                * volume step toward vol_end every SfxVPeriod samples
                 dec     SfxVCnt
-                bne     ps_vok
+                bne     ps_samp
                 lda     SfxVPeriod
                 sta     SfxVCnt
                 lda     SfxVol
                 cmpa    SfxVolEnd
-                beq     ps_vok
+                beq     ps_samp
                 blo     ps_vup
                 dec     SfxVol
-                bra     ps_vok
+                bra     ps_samp
 ps_vup          inc     SfxVol
-ps_vok
+ps_samp
                 lda     SfxFlags
-                bita    #$01
-                bne     ps_noise
+                bita    #1
+                bne     ps_nz
                 ldx     SfxTab
                 lda     SfxPhase
                 lda     a,x
-                bra     ps_scale
-ps_noise
-                ldd     SfxLfsr
+                bra     ps_dac
+ps_nz           ldd     SfxLfsr
                 bne     ps_n1
                 ldd     #$ACE1
 ps_n1           eora    SfxLfsr+1
@@ -173,26 +171,24 @@ ps_n1           eora    SfxLfsr+1
                 eora    SfxLfsr
                 std     SfxLfsr
                 lda     SfxFlags
-                bita    #$02
-                bne     ps_whoosh
+                bita    #2
+                bne     ps_wh
                 lda     SfxLfsr+1
                 anda    #63
-                bra     ps_scale
-ps_whoosh
-                lda     SfxLfsr
+                bra     ps_dac
+ps_wh           lda     SfxLfsr
                 anda    #63
                 ldb     SfxLfsr+1
                 andb    #63
-                stb     ,-s
+                pshs    b
                 suba    ,s+
                 bpl     ps_w1
                 nega
 ps_w1           adda    #10
                 cmpa    #63
-                bls     ps_scale
+                bls     ps_dac
                 lda     #63
-ps_scale
-                ldb     SfxVol
+ps_dac          ldb     SfxVol
                 mul
                 lsra
                 rorb
@@ -212,40 +208,50 @@ ps_scale
                 anda    #$FC
                 sta     $FF20
                 tsta
-                bpl     ps_p0
+                bpl     ps_pb0
                 lda     $FF22
                 ora     #$02
-                bra     ps_p1
-ps_p0           lda     $FF22
+                bra     ps_pb1
+ps_pb0          lda     $FF22
                 anda    #$FD
-ps_p1           sta     $FF22
+ps_pb1          sta     $FF22
                 lda     SfxPhase
                 adda    SfxPitch
                 sta     SfxPhase
                 ldb     #28
-ps_d1           decb
-                bne     ps_d1
+ps_del          decb
+                bne     ps_del
                 lda     SfxPitch
                 cmpa    SfxPend
-                beq     ps_len
-                blo     ps_inc
+                beq     ps_next
+                blo     ps_pin
                 deca
                 bra     ps_pst
-ps_inc          inca
+ps_pin          inca
 ps_pst          sta     SfxPitch
-ps_len
-                ldd     SfxLen
+ps_next         ldd     SfxLen
                 subd    #1
                 std     SfxLen
                 lbne    ps_loop
-
-ps_quiet
-                lda     #$80
+ps_quiet        lda     #$80
                 sta     $FF20
-ps_done
-                andcc   #$AF
+ps_done         andcc   #$AF
                 puls    cc,a,b,x,y,u
                 rts
+
+***********************************************************************
+* Working storage MUST be real data bytes inside the DECB image
+SfxFlags        fcb     0
+SfxPitch        fcb     0
+SfxPend         fcb     0
+SfxVol          fcb     0
+SfxVolEnd       fcb     0
+SfxVPeriod      fcb     1
+SfxVCnt         fcb     1
+SfxPhase        fcb     0
+SfxLen          fdb     0
+SfxTab          fdb     0
+SfxLfsr         fdb     $ACE1
 
 SfxCat
         fcb     0,$00,$30,$30,$09,$C4,$38,$38  * 0: blip (square)
@@ -256,18 +262,5 @@ SfxCat
 
 SfxTables
                 includebin sfx_tables.bin
-
-SfxFlags        rmb     1
-SfxPitch        rmb     1
-SfxPend         rmb     1
-SfxVol          rmb     1
-SfxVolEnd       rmb     1
-SfxVPeriod      rmb     1
-SfxVCnt         rmb     1
-SfxLen          rmb     2
-SfxLen0         rmb     2
-SfxPhase        rmb     1
-SfxTab          rmb     2
-SfxLfsr         fdb     $ACE1
 
                 end     START
