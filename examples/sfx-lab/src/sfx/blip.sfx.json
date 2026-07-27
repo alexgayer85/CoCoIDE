@@ -2,12 +2,12 @@
   "name": "blip",
   "id": 0,
   "wave": "square",
-  "pitch": 48,
-  "pitch_end": 48,
-  "length": 100,
-  "volume": 50,
+  "pitch": 180,
+  "pitch_end": 180,
+  "length": 800,
+  "volume": 56,
   "duty": 0.5,
   "table": null,
-  "comment": "key blip",
+  "comment": "",
   "version": 1
 }

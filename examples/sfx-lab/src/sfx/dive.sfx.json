@@ -2,12 +2,12 @@
   "name": "dive",
   "id": 2,
   "wave": "saw",
-  "pitch": 70,
-  "pitch_end": 8,
-  "length": 550,
-  "volume": 42,
+  "pitch": 200,
+  "pitch_end": 30,
+  "length": 1500,
+  "volume": 50,
   "duty": 0.5,
   "table": null,
-  "comment": "falling tone",
+  "comment": "",
   "version": 1
 }

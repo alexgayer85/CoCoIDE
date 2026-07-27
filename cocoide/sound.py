@@ -377,14 +377,18 @@ SoundInit
 
 ***********************************************************************
 * PlaySfx — A = effect id
+*
+* Each "tick" outputs one wavetable sample then delays. Delay scales with
+* pitch (higher pitch → shorter delay → higher tone). Length is in ticks.
+* Old v1 used delay~10 cycles (tones were ~2ms clicks). Now delay is
+* hundreds of cycles so effects are clearly audible.
 PlaySfx
                 pshs    cc,a,b,x,y,u
                 orcc    #$50
                 cmpa    #SFXCOUNT
                 lbhs    ps_done
-                * U = &SfxCat[A]
                 ldb     #8
-                mul                     ; D = A*8
+                mul
                 ldu     #SfxCat
                 leau    d,u
                 lda     1,u
@@ -398,16 +402,24 @@ PlaySfx
                 std     SfxLen
                 lda     6,u
                 sta     SfxVol
-                * X = SfxTables + id*256
                 lda     ,u
                 clrb
-                tfr     d,x             ; D = id*256
+                tfr     d,x
                 leax    SfxTables,x
                 stx     SfxTab
                 clr     SfxPhase
-                clr     SfxPhase+1
                 lda     $FF23
                 ora     #$08
+                sta     $FF23
+                * PB1 out enable (helps XRoar / some hardware hear tone)
+                lda     $FF23
+                anda    #$FB
+                sta     $FF23
+                lda     $FF22
+                ora     #$02
+                sta     $FF22
+                lda     $FF23
+                ora     #$04
                 sta     $FF23
                 ldd     SfxLen
                 lbeq    ps_quiet
@@ -416,13 +428,11 @@ ps_loop
                 lda     SfxFlags
                 bita    #$01
                 bne     ps_noise
-                * A = table[phase_hi]
                 ldx     SfxTab
-                lda     SfxPhase        ; high byte of phase
+                lda     SfxPhase
                 lda     a,x
                 bra     ps_scale
 ps_noise
-                * 16-bit LFSR step → A = 0..63
                 ldd     SfxLfsr
                 bne     ps_n1
                 ldd     #$ACE1
@@ -434,9 +444,9 @@ ps_n1           eora    SfxLfsr+1
                 lda     SfxLfsr+1
                 anda    #63
 ps_scale
-                * A = raw 0..63; level ~= (raw * vol) >> 6; DAC = level << 2
+                * A=0..63 → DAC bits; also drive PB1 from sample MSB
                 ldb     SfxVol
-                mul                     ; D = raw * vol
+                mul
                 lsra
                 rorb
                 lsra
@@ -448,17 +458,38 @@ ps_scale
                 lsra
                 rorb
                 lsra
-                rorb                    ; D >>= 6 → B
+                rorb
                 tfr     b,a
                 lsla
                 lsla
                 anda    #$FC
                 sta     $FF20
-                * phase_hi += pitch (8-bit step through 256-sample table)
-                lda     SfxPhase
-                adda    SfxPitch
-                sta     SfxPhase
-                * slide pitch toward pitch_end
+                * PB1: bit1 of $FF22 follow sample energy
+                tfr     a,b
+                lda     $FF22
+                andb    #$80
+                beq     ps_p0
+                ora     #$02
+                bra     ps_p1
+ps_p0           anda    #$FD
+ps_p1           sta     $FF22
+                * advance table index by 1 (walk wave); pitch controls delay
+                inc     SfxPhase
+                * delay: base + (256-pitch)*scale  → higher pitch, less delay
+                lda     #255
+                suba    SfxPitch
+                lsra                    ; 0..127
+                inca
+                tfr     a,b
+                clra
+                tfr     d,x             ; X = 1..128
+                leax    40,x            ; minimum pad
+ps_d1           ldb     #8
+ps_d2           decb
+                bne     ps_d2
+                leax    -1,x
+                bne     ps_d1
+                * pitch slide
                 lda     SfxPitch
                 cmpa    SfxPend
                 beq     ps_len
@@ -470,11 +501,7 @@ ps_len
                 ldd     SfxLen
                 subd    #1
                 std     SfxLen
-                lbeq    ps_quiet
-                ldb     #10
-ps_dly          decb
-                bne     ps_dly
-                bra     ps_loop
+                lbne    ps_loop
 
 ps_quiet
                 lda     #$80
