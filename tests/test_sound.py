@@ -58,3 +58,19 @@ def test_export_writes_player_and_tables(tmp_path: Path):
     assert "ora     #$08" in text
     assert "sta     #$3C" not in text.lower().replace(" ", "")
     assert any(p.name == "sfx.asm" for p in paths)
+
+
+def test_preview_pcm_differs_by_wave():
+    from cocoide.sound import render_pcm_preview
+
+    a = render_pcm_preview(
+        SfxPatch(name="a", wave="square", pitch=48, pitch_end=48, length=500, volume=50)
+    )
+    b = render_pcm_preview(
+        SfxPatch(name="b", wave="noise", pitch=40, pitch_end=10, length=500, volume=40, volume_end=5)
+    )
+    c = render_pcm_preview(
+        SfxPatch(name="c", wave="whoosh", pitch=90, pitch_end=20, length=500, volume=45, volume_end=8)
+    )
+    assert len(a) > 100 and len(b) > 100 and len(c) > 100
+    assert a != b and b != c

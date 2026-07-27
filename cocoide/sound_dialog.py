@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox,
@@ -28,7 +29,10 @@ from cocoide.sound import (
     export_project_sfx,
     generate_table,
     list_sfx_dir,
+    play_pcm_host,
+    render_pcm_preview,
     save_sfx,
+    _seed_for,
 )
 
 _DIALOG_STYLE = """
@@ -46,50 +50,74 @@ QPushButton:hover { background-color: #353b48; }
 QPushButton#primary {
     background-color: #c4782a; color: #1a1d23; border-color: #e09a40; font-weight: bold;
 }
+QPushButton#play {
+    background-color: #2d6a4f; color: #e8eaed; border-color: #40916c; font-weight: bold;
+}
 """
 
 
 class WaveformView(QWidget):
-    """Simple 256-sample plot (0–63)."""
+    """Plot either a cycle table or a full rendered SFX envelope."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._table = bytes(256)
-        self.setMinimumHeight(100)
-        self.setMinimumWidth(280)
+        self._samples: list[int] = []  # signed PCM or 0..63 table scaled
+        self._title = ""
+        self.setMinimumHeight(120)
+        self.setMinimumWidth(320)
 
-    def set_table(self, data: bytes) -> None:
-        self._table = data if data else bytes(256)
+    def set_pcm(self, pcm: bytes, title: str = "") -> None:
+        """pcm = s16le mono."""
+        self._title = title
+        self._samples = []
+        if pcm and len(pcm) >= 2:
+            # downsample for draw
+            step = max(1, len(pcm) // 2 // 400)
+            for i in range(0, len(pcm) - 1, 2 * step):
+                v = int.from_bytes(pcm[i : i + 2], "little", signed=True)
+                self._samples.append(v)
+        self.update()
+
+    def set_table(self, data: bytes, title: str = "") -> None:
+        self._title = title
+        self._samples = [((b - 32) * 500) for b in data] if data else []
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         del event
         p = QPainter(self)
         p.fillRect(self.rect(), QColor("#12151a"))
-        w, h = self.width(), self.height()
-        pen = QPen(QColor("#6b7380"))
-        pen.setWidth(1)
+        w, h = max(1, self.width()), max(1, self.height())
+        pen = QPen(QColor("#3a4150"))
         p.setPen(pen)
         mid = h // 2
         p.drawLine(0, mid, w, mid)
-        if not self._table:
+        if self._title:
+            p.setPen(QColor("#9aa3b2"))
+            p.drawText(8, 14, self._title)
+        if len(self._samples) < 2:
+            p.setPen(QColor("#6b7380"))
+            p.drawText(8, mid, "(no waveform)")
+            p.end()
             return
         pen = QPen(QColor("#e09a40"))
-        pen.setWidth(2)
+        pen.setWidth(1)
         p.setPen(pen)
-        n = len(self._table)
-        pts = []
-        for i, b in enumerate(self._table):
+        n = len(self._samples)
+        peak = max(1, max(abs(s) for s in self._samples))
+        prev = None
+        for i, s in enumerate(self._samples):
             x = int(i * (w - 1) / max(1, n - 1))
-            y = h - 2 - int(b * (h - 4) / 63)
-            pts.append((x, y))
-        for i in range(1, len(pts)):
-            p.drawLine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
+            y = mid - int(s * (h // 2 - 4) / peak)
+            y = max(1, min(h - 2, y))
+            if prev is not None:
+                p.drawLine(prev[0], prev[1], x, y)
+            prev = (x, y)
         p.end()
 
 
 class SoundDialog(QDialog):
-    """Author SFX patches and export sfx.asm + sfx_tables.bin."""
+    """Author SFX patches, preview on host speakers, export ASM."""
 
     def __init__(
         self,
@@ -99,11 +127,13 @@ class SoundDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Sound / SFX Lab")
-        self.setMinimumSize(720, 480)
+        self.setMinimumSize(780, 520)
         self.setStyleSheet(_DIALOG_STYLE)
         self._root = project_root
         self._patches: list[SfxPatch] = []
         self._current: SfxPatch | None = None
+        self._filling = False
+        self._status = QLabel("")
         self._build_ui()
         self._reload_list()
 
@@ -122,15 +152,16 @@ class SoundDialog(QDialog):
         root.setSpacing(10)
 
         path_lab = QLabel(
-            f"Project: {self._root}" if self._root else "No project open — export picks a folder."
+            f"Project: {self._root}"
+            if self._root
+            else "No project open — open a project to save under src/sfx/."
         )
         path_lab.setWordWrap(True)
         root.addWidget(path_lab)
 
         body = QHBoxLayout()
-        # list
         left = QVBoxLayout()
-        left.addWidget(QLabel("Effects"))
+        left.addWidget(QLabel("Effects (select to edit / preview)"))
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self._on_select)
         left.addWidget(self.list, stretch=1)
@@ -139,12 +170,16 @@ class SoundDialog(QDialog):
         b_new.clicked.connect(self._new_patch)
         b_del = QPushButton("Delete")
         b_del.clicked.connect(self._delete_patch)
+        b_play = QPushButton("▶ Preview")
+        b_play.setObjectName("play")
+        b_play.setToolTip("Play on this computer’s speakers (no XRoar)")
+        b_play.clicked.connect(self._preview)
         row.addWidget(b_new)
         row.addWidget(b_del)
+        row.addWidget(b_play)
         left.addLayout(row)
         body.addLayout(left, stretch=1)
 
-        # form
         right = QVBoxLayout()
         form = QFormLayout()
         self.name_edit = QLineEdit()
@@ -152,28 +187,43 @@ class SoundDialog(QDialog):
         for w in WAVE_KINDS:
             if w != "custom":
                 self.wave_combo.addItem(w)
+        self.wave_combo.setToolTip(
+            "sine/square/saw = tones; noise = static; whoosh = breathy (missile shoo)"
+        )
         self.pitch_spin = QSpinBox()
         self.pitch_spin.setRange(1, 255)
+        self.pitch_spin.setToolTip("Phase step — higher = higher pitch (f ≈ Fs×pitch/256)")
         self.pend_spin = QSpinBox()
         self.pend_spin.setRange(1, 255)
+        self.pend_spin.setToolTip("Pitch slides toward this over the effect")
         self.len_spin = QSpinBox()
-        self.len_spin.setRange(16, 8000)
+        self.len_spin.setRange(16, 12000)
         self.vol_spin = QSpinBox()
         self.vol_spin.setRange(0, 63)
+        self.vend_spin = QSpinBox()
+        self.vend_spin.setRange(0, 63)
+        self.vend_spin.setToolTip("Volume fades toward this (use low end for whoosh/decay)")
         self.duty_spin = QDoubleSpinBox()
         self.duty_spin.setRange(0.05, 0.95)
         self.duty_spin.setSingleStep(0.05)
         form.addRow("Name", self.name_edit)
         form.addRow("Wave", self.wave_combo)
         form.addRow("Pitch", self.pitch_spin)
-        form.addRow("Pitch end (slide)", self.pend_spin)
-        form.addRow("Length (ticks)", self.len_spin)
-        form.addRow("Volume (0–63)", self.vol_spin)
+        form.addRow("Pitch end", self.pend_spin)
+        form.addRow("Length (samples)", self.len_spin)
+        form.addRow("Volume start", self.vol_spin)
+        form.addRow("Volume end", self.vend_spin)
         form.addRow("Duty (square)", self.duty_spin)
         right.addLayout(form)
 
         self.wave_view = WaveformView()
         right.addWidget(self.wave_view)
+        self.cycle_lab = QLabel("Cycle table:")
+        right.addWidget(self.cycle_lab)
+        self.cycle_view = WaveformView()
+        self.cycle_view.setMinimumHeight(64)
+        right.addWidget(self.cycle_view)
+
         for w in (
             self.name_edit,
             self.wave_combo,
@@ -181,6 +231,7 @@ class SoundDialog(QDialog):
             self.pend_spin,
             self.len_spin,
             self.vol_spin,
+            self.vend_spin,
             self.duty_spin,
         ):
             if hasattr(w, "valueChanged"):
@@ -199,9 +250,10 @@ class SoundDialog(QDialog):
         btn_row.addWidget(b_save)
         btn_row.addWidget(b_export)
         right.addLayout(btn_row)
+        self._status.setWordWrap(True)
+        right.addWidget(self._status)
         hint = QLabel(
-            "Export writes src/sfx.asm + src/sfx_tables.bin. "
-            "Build Disk to assemble SFX.BIN. Call SoundInit / PlaySfx (A=id)."
+            "▶ Preview uses your PC speakers. Export → src/sfx.asm + sfx_tables.bin → Build Disk for CoCo/XRoar."
         )
         hint.setWordWrap(True)
         right.addWidget(hint)
@@ -216,6 +268,7 @@ class SoundDialog(QDialog):
         root.addWidget(buttons)
 
     def _reload_list(self) -> None:
+        self.list.blockSignals(True)
         self.list.clear()
         sdir = self._sfx_dir()
         if sdir and sdir.is_dir():
@@ -223,11 +276,13 @@ class SoundDialog(QDialog):
         else:
             self._patches = []
         for p in self._patches:
-            self.list.addItem(f"{p.id}: {p.name} ({p.wave})")
+            self.list.addItem(f"{p.id}: {p.summary()}")
+        self.list.blockSignals(False)
         if self._patches:
             self.list.setCurrentRow(0)
         else:
             self._current = None
+            self._update_plot()
 
     def _on_select(self, row: int) -> None:
         if row < 0 or row >= len(self._patches):
@@ -237,6 +292,7 @@ class SoundDialog(QDialog):
         self._fill_form(self._current)
 
     def _fill_form(self, p: SfxPatch) -> None:
+        self._filling = True
         self.name_edit.setText(p.name)
         idx = self.wave_combo.findText(p.wave)
         self.wave_combo.setCurrentIndex(max(0, idx))
@@ -244,7 +300,9 @@ class SoundDialog(QDialog):
         self.pend_spin.setValue(p.pitch_end)
         self.len_spin.setValue(p.length)
         self.vol_spin.setValue(p.volume)
+        self.vend_spin.setValue(p.volume_end)
         self.duty_spin.setValue(p.duty)
+        self._filling = False
         self._update_plot()
 
     def _read_form(self) -> SfxPatch:
@@ -255,22 +313,59 @@ class SoundDialog(QDialog):
         base.pitch_end = self.pend_spin.value()
         base.length = self.len_spin.value()
         base.volume = self.vol_spin.value()
+        base.volume_end = self.vend_spin.value()
         base.duty = self.duty_spin.value()
         return base.clamp()
 
     def _on_form_changed(self, *_args) -> None:
+        if self._filling:
+            return
         self._update_plot()
+        # live-update list label for current
+        row = self.list.currentRow()
+        if 0 <= row < len(self._patches):
+            p = self._read_form()
+            p.id = row
+            self.list.item(row).setText(f"{p.id}: {p.summary()}")
 
     def _update_plot(self) -> None:
         p = self._read_form()
-        t = generate_table(p.wave, volume=p.volume, duty=p.duty, custom=p.table)
-        self.wave_view.set_table(t)
+        # Full rendered SFX (what you'll hear)
+        pcm = render_pcm_preview(p)
+        self.wave_view.set_pcm(pcm, title=f"Preview: {p.summary()}")
+        # One cycle of the wavetable (shape)
+        t = generate_table(
+            p.wave,
+            volume=p.volume,
+            duty=p.duty,
+            custom=p.table,
+            seed=_seed_for(p),
+        )
+        self.cycle_view.set_table(t, title=f"Wavetable cycle ({p.wave})")
+
+    def _preview(self) -> None:
+        p = self._read_form()
+        # Cap preview length so UI stays responsive
+        if p.length > 8000:
+            p = SfxPatch(**{**p.__dict__, "length": 8000}).clamp()
+        pcm = render_pcm_preview(p)
+        msg = play_pcm_host(pcm)
+        self._status.setText(msg)
 
     def _new_patch(self) -> None:
         n = len(self._patches)
-        p = SfxPatch(name=f"sfx{n}", id=n, wave="square", pitch=32, pitch_end=32, length=200, volume=48)
+        p = SfxPatch(
+            name=f"sfx{n}",
+            id=n,
+            wave="square",
+            pitch=40,
+            pitch_end=40,
+            length=2000,
+            volume=48,
+            volume_end=48,
+        )
         self._patches.append(p)
-        self.list.addItem(f"{p.id}: {p.name} ({p.wave})")
+        self.list.addItem(f"{p.id}: {p.summary()}")
         self.list.setCurrentRow(n)
         self._save_current()
 
@@ -291,10 +386,11 @@ class SoundDialog(QDialog):
         p = self._read_form()
         sdir = self._sfx_dir()
         if sdir is None:
-            QMessageBox.information(self, "SFX Lab", "Open a project to save patches under src/sfx/.")
+            QMessageBox.information(
+                self, "SFX Lab", "Open a project to save patches under src/sfx/."
+            )
             return
         sdir.mkdir(parents=True, exist_ok=True)
-        # rename file if name changed
         if self._current and self._current.name != p.name:
             old = sdir / f"{self._current.name}.sfx.json"
             if old.is_file():
@@ -304,14 +400,13 @@ class SoundDialog(QDialog):
             p.id = row
         save_sfx(sdir / f"{p.name}.sfx.json", p)
         self._reload_list()
-        # reselect by name
         for i, q in enumerate(self._patches):
             if q.name == p.name:
                 self.list.setCurrentRow(i)
                 break
+        self._status.setText(f"Saved {p.name}.sfx.json")
 
     def _export(self) -> None:
-        # ensure current form saved into list
         if self._patches or self._current is not None:
             try:
                 self._save_current()
@@ -324,7 +419,6 @@ class SoundDialog(QDialog):
             return
         patches = list_sfx_dir(sdir) if sdir else []
         if not patches:
-            # use form as single patch
             patches = [self._read_form()]
             patches[0].id = 0
             if sdir:
@@ -336,9 +430,12 @@ class SoundDialog(QDialog):
             QMessageBox.warning(self, "Export failed", str(exc))
             return
         names = ", ".join(p.name for p in written)
+        self._status.setText(f"Exported {names} — Build Disk for XRoar")
         QMessageBox.information(
             self,
             "Exported",
-            f"Wrote {names}\n\nBuild Disk to assemble SFX.BIN, then Run in XRoar.\n"
+            f"Wrote {names}\n\n"
+            f"Use ▶ Preview for PC speakers.\n"
+            f"Build Disk → Run in XRoar for CoCo hardware path.\n"
             f"BASIC: CLEAR200,&H3F00 : AUDIO ON : LOADM\"SFX\":EXEC",
         )

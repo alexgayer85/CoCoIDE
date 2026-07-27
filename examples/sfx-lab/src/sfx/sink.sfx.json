@@ -2,12 +2,13 @@
   "name": "sink",
   "id": 4,
   "wave": "saw",
-  "pitch": 55,
-  "pitch_end": 4,
-  "length": 7000,
-  "volume": 54,
+  "pitch": 48,
+  "pitch_end": 3,
+  "length": 8000,
+  "volume": 58,
+  "volume_end": 20,
   "duty": 0.5,
   "table": null,
-  "comment": "sinking / Shark Shark death-like descent",
+  "comment": "sinking death descent",
   "version": 1
 }

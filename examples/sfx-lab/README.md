@@ -13,8 +13,10 @@ Short DAC sound effects built with **Tools → Sound / SFX Lab**.
 | 1 | blip | square buzzer |
 | 2 | splash | noise burst |
 | 3 | dive | falling machinery |
-| 4 | **shoo** | missile whoosh (“shhh/shoo”) |
-| 5 | **sink** | deep descending death (Shark! Shark!-ish) |
+| 4 | **shoo** | breathy whoosh (`whoosh` wave, volume fade) |
+| 5 | **sink** | long descending saw + volume fall |
+
+Use **Tools → Sound / SFX Lab → ▶ Preview** to audition on the PC without XRoar.
 
 ## Authoring
 

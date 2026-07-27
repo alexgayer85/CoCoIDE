@@ -24,11 +24,25 @@ Authoring is inspired by Paul Fiscarelli’s [CoCo Waveform Generator](https://g
 ## Authoring a patch
 
 1. **New** — create an effect  
-2. Set **wave** (`sine`, `square`, `saw`, `noise`), **pitch**, **pitch end** (slide), **length**, **volume**  
-3. **Save patch** → `src/sfx/<name>.sfx.json`  
-4. **Export ASM to project** → `src/sfx.asm` + `src/sfx_tables.bin`  
-5. **Build Disk** — assembles to **`SFX.BIN`**
+2. Set **wave**, **pitch** / **pitch end**, **volume** / **volume end**, **length**  
+3. **▶ Preview** — hear it on your **PC speakers** (no XRoar needed)  
+4. **Save patch** → `src/sfx/<name>.sfx.json`  
+5. **Export ASM to project** → `src/sfx.asm` + `src/sfx_tables.bin`  
+6. **Build Disk** — assembles to **`SFX.BIN`** for CoCo / XRoar  
 
+### Waves
+
+| Wave | Character |
+|------|-----------|
+| `sine` | Soft tone |
+| `square` | Buzzer / beep |
+| `saw` | Harsh / machinery / dive |
+| `noise` | Static / hit splash |
+| `whoosh` | Breathy hiss (missile “shoo”) |
+
+**Pitch** = phase step (`f ≈ Fs × pitch / 256`). **Volume end** fades the effect (use a low end for whispers and deaths).
+
+The lab shows two plots: **full effect preview** (time) and **one wavetable cycle** (shape). The list line shows pitch/volume/length so effects don’t look identical.
 ## Runtime API
 
 ```asm

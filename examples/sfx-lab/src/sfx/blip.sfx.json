@@ -6,6 +6,7 @@
   "pitch_end": 48,
   "length": 2500,
   "volume": 56,
+  "volume_end": 56,
   "duty": 0.5,
   "table": null,
   "comment": "mid square beep",
