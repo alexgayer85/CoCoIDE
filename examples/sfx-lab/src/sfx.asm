@@ -249,10 +249,10 @@ ps_done
 
 SfxCat
         fcb     0,$00,$30,$30,$09,$C4,$38,$38  * 0: blip (square)
-        fcb     1,$01,$24,$0E,$0D,$AC,$32,$0C  * 1: splash (noise)
-        fcb     2,$00,$46,$0E,$11,$94,$34,$28  * 2: dive (saw)
-        fcb     3,$03,$64,$16,$0A,$F0,$2A,$04  * 3: shoo (whoosh)
-        fcb     4,$00,$30,$03,$1F,$40,$3A,$14  * 4: sink (saw)
+        fcb     1,$00,$46,$0E,$11,$94,$34,$28  * 1: dive (saw)
+        fcb     2,$03,$64,$16,$0A,$F0,$2A,$04  * 2: shoo (whoosh)
+        fcb     3,$00,$30,$03,$1F,$40,$3A,$14  * 3: sink (saw)
+        fcb     4,$01,$24,$0E,$0D,$AC,$32,$0C  * 4: splash (noise)
 
 SfxTables
                 includebin sfx_tables.bin

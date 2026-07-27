@@ -159,7 +159,91 @@ def list_sfx_dir(sfx_dir: Path) -> list[SfxPatch]:
 
 
 def _seed_for(patch: SfxPatch) -> int:
-    return (hash(patch.name) & 0xFFFF) or 0xACE1
+    """Stable name hash (do not use Python's randomized hash())."""
+    h = 0
+    for c in patch.name:
+        h = (h * 33 + ord(c)) & 0xFFFF
+    return h or 0xACE1
+
+
+def _lfsr_coco(state: int) -> int:
+    """Match PlaySfx: ldd; eora low; lsra; rorb; eora orig_high; std."""
+    if state == 0:
+        state = 0xACE1
+    a0 = (state >> 8) & 0xFF
+    b0 = state & 0xFF
+    a = a0 ^ b0
+    d = ((a & 0xFF) << 8) | b0
+    d >>= 1
+    a = ((d >> 8) ^ a0) & 0xFF
+    b = d & 0xFF
+    return (a << 8) | b
+
+
+def simulate_playsfx_levels(patch: SfxPatch) -> list[int]:
+    """DAC levels 0..63 per CoCo sample — single source of truth for preview.
+
+    Mirrors exported PlaySfx (volume step envelope, phase+=pitch, LFSR modes).
+    """
+    patch = patch.clamp()
+    flags_noise = patch.wave in ("noise", "whoosh")
+    flags_whoosh = patch.wave == "whoosh"
+    table = generate_table(
+        patch.wave,
+        volume=MAX_VOLUME,
+        duty=patch.duty,
+        custom=patch.table,
+        seed=_seed_for(patch),
+    )
+    pitch = patch.pitch
+    pitch_end = patch.pitch_end
+    vol = patch.volume
+    vol_end = patch.volume_end
+    length = patch.length
+    # period = max(1, min(255,len) / max(1,|dv|))  — same as ASM
+    dv = abs(patch.volume - patch.volume_end) or 1
+    len8 = min(255, length) if length >= 256 else length
+    vperiod = max(1, min(255, len8 // dv))
+    vcnt = vperiod
+    phase = 0
+    lfsr = 0xACE1  # fixed start like ASM SfxLfsr fdb
+    levels: list[int] = []
+
+    for _ in range(length):
+        vcnt -= 1
+        if vcnt == 0:
+            vcnt = vperiod
+            if vol < vol_end:
+                vol += 1
+            elif vol > vol_end:
+                vol -= 1
+
+        if flags_noise:
+            lfsr = _lfsr_coco(lfsr) or 0xACE1
+            if flags_whoosh:
+                a = (lfsr >> 8) & 63
+                b = lfsr & 63
+                raw = abs(a - b) + 10
+                if raw > 63:
+                    raw = 63
+            else:
+                raw = lfsr & 63
+        else:
+            raw = table[phase & 0xFF]
+
+        # MUL then six lsr on D → (raw*vol)>>6
+        level = (raw * vol) >> 6
+        if level > 63:
+            level = 63
+        levels.append(level)
+
+        phase = (phase + pitch) & 0xFF
+        if pitch < pitch_end:
+            pitch += 1
+        elif pitch > pitch_end:
+            pitch -= 1
+
+    return levels
 
 
 def render_pcm_preview(
@@ -167,59 +251,24 @@ def render_pcm_preview(
     *,
     sample_rate: int = PREVIEW_RATE,
 ) -> bytes:
-    """Render mono s16le PCM matching CoCo PlaySfx algorithm (phase += pitch)."""
-    patch = patch.clamp()
-    seed = _seed_for(patch)
-    table = generate_table(
-        patch.wave,
-        volume=MAX_VOLUME,
-        duty=patch.duty,
-        custom=patch.table,
-        seed=seed,
-    )
-    use_noise = patch.wave in ("noise", "whoosh")
-    pitch = patch.pitch
-    pitch_end = patch.pitch_end
-    vol = patch.volume
-    vol_end = patch.volume_end
-    length = patch.length
-    phase = 0
-    lfsr = seed
-    samples: list[int] = []
+    """Host PCM from the same sample stream CoCo PlaySfx emits.
 
-    for tick in range(length):
-        # linear volume envelope
-        if length > 1:
-            vol_now = vol + (vol_end - vol) * tick // (length - 1)
-        else:
-            vol_now = vol
-        vol_now = max(0, min(MAX_VOLUME, vol_now))
-
-        if use_noise:
-            lfsr = _lfsr_step(lfsr) or 0xACE1
-            if patch.wave == "whoosh":
-                # breathy: high-pass-ish from LFSR
-                raw = min(63, abs((lfsr & 63) - ((lfsr >> 4) & 63)) + 10)
-            else:
-                raw = lfsr & 63
-        else:
-            raw = table[phase & 0xFF]
-
-        level = (raw * vol_now) >> 6  # match CoCo >>6 approx
-        amp = (level - 32) / 32.0 if level else 0.0
-        # gentle soft-clip
-        amp = max(-1.0, min(1.0, amp))
-        samples.append(int(amp * 22000))
-
-        phase = (phase + pitch) & 0xFF
-        if pitch != pitch_end:
-            if pitch < pitch_end:
-                pitch = min(pitch_end, pitch + 1)
-            else:
-                pitch = max(pitch_end, pitch - 1)
-
-    return b"".join(struct.pack("<h", s) for s in samples)
-
+    Each CoCo DAC sample is held for ``hold`` host samples so pitch tracks
+    the emulator (Fs_coco ≈ 0.89e6 / ~280 ≈ 3.2 kHz; we use 3200).
+    """
+    levels = simulate_playsfx_levels(patch)
+    # Match fixed delay in ASM (~28 decb loops + work ≈ 250–350 cycles)
+    coco_fs = 3200
+    hold = max(1, sample_rate // coco_fs)
+    out = bytearray()
+    for level in levels:
+        # DAC nibble 0..63 → bipolar-ish around mid (same as CoCo path perception)
+        # Use the actual DAC bus value <<2 as unipolar duty energy:
+        dac = (level << 2) & 0xFC  # 0,4,8,...,252
+        amp = (dac - 128) / 128.0
+        val = int(max(-1.0, min(1.0, amp)) * 24000)
+        out.extend(struct.pack("<h", val) * hold)
+    return bytes(out)
 
 def write_wav(path: Path, pcm: bytes, *, sample_rate: int = PREVIEW_RATE) -> None:
     path = Path(path)

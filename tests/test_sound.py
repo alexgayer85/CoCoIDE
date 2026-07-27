@@ -74,3 +74,23 @@ def test_preview_pcm_differs_by_wave():
     )
     assert len(a) > 100 and len(b) > 100 and len(c) > 100
     assert a != b and b != c
+
+
+def test_simulate_volume_steps_toward_end():
+    from cocoide.sound import simulate_playsfx_levels
+
+    levels = simulate_playsfx_levels(
+        SfxPatch(
+            name="fade",
+            wave="square",
+            pitch=32,
+            pitch_end=32,
+            length=100,
+            volume=40,
+            volume_end=0,
+        )
+    )
+    # average energy should drop toward the end
+    head = sum(levels[:20]) / 20
+    tail = sum(levels[-20:]) / 20
+    assert head > tail

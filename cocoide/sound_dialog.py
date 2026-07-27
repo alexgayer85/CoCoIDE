@@ -253,7 +253,8 @@ class SoundDialog(QDialog):
         self._status.setWordWrap(True)
         right.addWidget(self._status)
         hint = QLabel(
-            "▶ Preview uses your PC speakers. Export → src/sfx.asm + sfx_tables.bin → Build Disk for CoCo/XRoar."
+            "▶ Preview simulates the same PlaySfx loop as the CoCo (phase, volume steps, LFSR). "
+            "Export → Build Disk for XRoar/hardware."
         )
         hint.setWordWrap(True)
         right.addWidget(hint)
