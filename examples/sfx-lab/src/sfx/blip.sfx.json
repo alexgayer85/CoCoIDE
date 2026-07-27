@@ -8,6 +8,6 @@
   "volume": 56,
   "duty": 0.5,
   "table": null,
-  "comment": "~1.5 kHz beep",
+  "comment": "mid square beep",
   "version": 1
 }

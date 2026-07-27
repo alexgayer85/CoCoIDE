@@ -3,15 +3,15 @@
 *
 * API:
 *   SoundInit  — enable DAC mux safely (call once)
-*   PlaySfx    — A = effect id 0..3-1 (blocks until done)
+*   PlaySfx    — A = effect id 0..5-1 (blocks until done)
 *
 * Clobbers: A,B,X,Y,U,CC
 * Hardware: 6-bit DAC $FF20; mux ORA #$08 only (never full-byte PIA smash)
-* Tables: sfx_tables.bin (768 bytes = 3 x 256)
+* Tables: sfx_tables.bin (1280 bytes = 5 x 256)
 * Wavetable model inspired by Paul Fiscarelli CoCoWG (samples 0-63).
 ***********************************************************************
 
-SFXCOUNT        equ     3
+SFXCOUNT        equ     5
 
                 org     $3F00
 
@@ -249,6 +249,8 @@ SfxCat
         fcb     0,$00,$30,$30,$09,$C4,$38,$00  * 0: blip
         fcb     1,$01,$20,$0C,$0F,$A0,$34,$00  * 1: splash
         fcb     2,$00,$40,$0C,$13,$88,$32,$00  * 2: dive
+        fcb     3,$01,$5A,$12,$08,$98,$26,$00  * 3: shoo
+        fcb     4,$00,$37,$04,$1B,$58,$36,$00  * 4: sink
 
 SfxTables
                 includebin sfx_tables.bin

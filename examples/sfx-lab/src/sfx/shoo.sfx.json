@@ -1,0 +1,13 @@
+{
+  "name": "shoo",
+  "id": 3,
+  "wave": "noise",
+  "pitch": 90,
+  "pitch_end": 18,
+  "length": 2200,
+  "volume": 38,
+  "duty": 0.5,
+  "table": null,
+  "comment": "missile dispatch \u2014 whispered whoosh",
+  "version": 1
+}

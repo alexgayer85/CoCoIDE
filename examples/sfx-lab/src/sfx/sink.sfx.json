@@ -1,0 +1,13 @@
+{
+  "name": "sink",
+  "id": 4,
+  "wave": "saw",
+  "pitch": 55,
+  "pitch_end": 4,
+  "length": 7000,
+  "volume": 54,
+  "duty": 0.5,
+  "table": null,
+  "comment": "sinking / Shark Shark death-like descent",
+  "version": 1
+}
