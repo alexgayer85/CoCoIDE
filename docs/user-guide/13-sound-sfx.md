@@ -49,7 +49,7 @@ AUDIO ON
 LOADM"SFX":EXEC
 ```
 
-With the demo loop exported: keys **1/2/3…** play effects; **Q** returns.
+The **sfx-lab** example auto-plays every effect once, then returns to BASIC (so a failed keyboard poll cannot hang). For games, call `PlaySfx` yourself on events.
 
 ## Files
 
