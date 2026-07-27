@@ -12,6 +12,7 @@ If you are changing the product, also update this guide (see [Keeping docs curre
 | Warnings | [07 — Diagnostics](07-diagnostics.md) |
 | Import disks | [11 — Browse & import disks](11-import-disks.md) |
 | Assembly | [12 — Assembly & BIN disassembly](12-assembly.md) |
+| Sound effects | [13 — Sound / SFX Lab](13-sound-sfx.md) |
 
 ## Contents
 
@@ -27,6 +28,8 @@ If you are changing the product, also update this guide (see [Keeping docs curre
 10. [Troubleshooting](10-troubleshooting.md)  
 11. [Browse & import disks](11-import-disks.md) — external `.dsk`, import, new project from disk  
 12. [Assembly & BIN disassembly](12-assembly.md) — lwasm, LOADM, best-effort decompile  
+13. [Sound / SFX Lab](13-sound-sfx.md) — DAC wavetables, export PlaySfx, XRoar  
+
 
 ## Related (not the user manual)
 

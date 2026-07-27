@@ -1,0 +1,15 @@
+{
+  "name": "sfx-lab",
+  "target": "coco3",
+  "memory_kb": 512,
+  "dialect": "decb",
+  "entry": "src/main.bas",
+  "disk_image": "build/work.dsk",
+  "auto_run": true,
+  "preprocessor": false,
+  "standalone": [],
+  "asm_sources": ["src/sfx.asm"],
+  "roms": {},
+  "xroar_ao": "",
+  "xroar_ao_gain": "0"
+}

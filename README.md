@@ -50,6 +50,7 @@ Portable packages redistribute XRoar under **GPL-3+** and other FOSS tools; see 
 - Disk panel: New / Add / Extract / Delete + free-granule bar
 - **Browse any `.dsk`**: import (detokenize BASIC), use as project disk, **New Project from Disk**
 - **6809 ASM** via `lwasm` → DECB `.BIN` on disk; **best-effort disassembly** of imported BINs
+- **Sound / SFX Lab** — design DAC wavetable effects, export mux-safe 6809 player (`PlaySfx`)
 - Portable layout: prefers `tools/` next to the app, then `PATH` / `COCOIDE_*` env overrides
 
 ## Requirements

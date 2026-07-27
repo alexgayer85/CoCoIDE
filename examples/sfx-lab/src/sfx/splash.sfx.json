@@ -1,0 +1,13 @@
+{
+  "name": "splash",
+  "id": 1,
+  "wave": "noise",
+  "pitch": 28,
+  "pitch_end": 6,
+  "length": 380,
+  "volume": 48,
+  "duty": 0.5,
+  "table": null,
+  "comment": "water/noise",
+  "version": 1
+}

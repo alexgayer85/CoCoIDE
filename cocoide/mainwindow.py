@@ -266,6 +266,11 @@ class MainWindow(QMainWindow):
         act_diag.triggered.connect(self.do_diagnostics)
         build_menu.addAction(act_diag)
 
+        tools_menu = self.menuBar().addMenu("&Tools")
+        act_sfx = QAction("Sound / SFX Lab…", self)
+        act_sfx.triggered.connect(self._open_sfx_lab)
+        tools_menu.addAction(act_sfx)
+
         help_menu = self.menuBar().addMenu("&Help")
         act_guide = QAction("User Guide…", self)
         act_guide.setShortcut(QKeySequence(Qt.Key.Key_F1))
@@ -278,6 +283,13 @@ class MainWindow(QMainWindow):
         act_about.triggered.connect(self._about)
         help_menu.addAction(act_about)
         self._help_dialog: QDialog | None = None
+
+    def _open_sfx_lab(self) -> None:
+        from cocoide.sound_dialog import SoundDialog
+
+        root = self.project.root if self.project else None
+        dlg = SoundDialog(self, project_root=root)
+        dlg.exec()
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")

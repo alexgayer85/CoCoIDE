@@ -61,6 +61,20 @@ Multi-file modern BASIC (`@include`). See `examples/seabattle/README.md`.
 ./run.sh examples/seabattle-ml
 ```
 
+## `examples/sudoku`
+
+Imported DECB Sudoku (BASIC + solver BIN + puzzle data under `src/imported/`).
+
+## `examples/sfx-lab`
+
+**Sound / SFX Lab** demo — DAC wavetable player (`SFX.BIN`). Keys **1/2/3** play
+effects; **Q** exits. Author patches via **Tools → Sound / SFX Lab**. See
+[13 — Sound / SFX Lab](13-sound-sfx.md).
+
+```bash
+./run.sh examples/sfx-lab
+```
+
 ## Making your own from an example
 
 1. Copy the example folder.  

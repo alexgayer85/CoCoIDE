@@ -1,0 +1,13 @@
+{
+  "name": "dive",
+  "id": 2,
+  "wave": "saw",
+  "pitch": 70,
+  "pitch_end": 8,
+  "length": 550,
+  "volume": 42,
+  "duty": 0.5,
+  "table": null,
+  "comment": "falling tone",
+  "version": 1
+}

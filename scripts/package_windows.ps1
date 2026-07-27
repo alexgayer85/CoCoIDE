@@ -149,7 +149,7 @@ if (Test-Path $guideSrc) {
 }
 
 # User-facing demos (skip diag_fixture — internal test project)
-foreach ($ex in @("hello", "seabattle", "seabattle-ml", "sudoku")) {
+foreach ($ex in @("hello", "seabattle", "seabattle-ml", "sudoku", "sfx-lab")) {
     $src = Join-Path $Root "examples\$ex"
     if (Test-Path $src) {
         $dest = Join-Path $Stage "examples\$ex"

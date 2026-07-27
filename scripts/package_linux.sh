@@ -68,7 +68,7 @@ fi
 
 # Example projects (sources only)
 # Ship user-facing demos (skip diag_fixture — internal test project)
-for ex in hello seabattle seabattle-ml sudoku; do
+for ex in hello seabattle seabattle-ml sudoku sfx-lab; do
   if [[ -d "${ROOT}/examples/${ex}" ]]; then
     mkdir -p "${STAGE}/examples/${ex}"
     rsync -a --exclude build --exclude '__pycache__' \

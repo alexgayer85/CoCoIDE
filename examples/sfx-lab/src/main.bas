@@ -1,0 +1,6 @@
+10 REM CoCoIDE SFX Lab demo
+20 REM Keys 1/2/3 = effects; Q = return to BASIC
+30 CLEAR200,&H3F00
+40 AUDIO ON
+50 LOADM"SFX":EXEC
+60 END
